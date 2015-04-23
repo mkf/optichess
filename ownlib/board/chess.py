@@ -4,7 +4,13 @@ from ownlib.board import GameEye,EmptyFieldInGame,FigureInGame
 from numpy import array,ndarray
 class Chess(GameEye):
 	startpoz = ""
-	def __init__(self,fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"): pass
+	def __init__(self,fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"):
+		def pola():
+			literkipol = ['A','B','C','D','E','F','G','H']
+			for litpol in range(0,8):
+				for numpol in range(0,8):
+					yield (str("%s%s" % (literkipol[litpol][0],str(numpol+1)[0])),(numpol,litpol))
+		self.fields = {l: k for l,k in pola()}
 	@staticmethod
 	def fen2array(fen,whiteup=True):
 		# use whiteup=False if you want to have a realistic view in str(boardarray)
@@ -21,6 +27,8 @@ class Chess(GameEye):
 		boardarray = array(lista)
 		boardshaped = boardarray.reshape(8,8)
 		return boardshaped
+#	def fenparse(self,fen):
+
 
 class EmptyFieldInChess(EmptyFieldInGame): pass
 class ChessFigure(FigureInGame): pass
