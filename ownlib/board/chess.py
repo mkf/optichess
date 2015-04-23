@@ -12,7 +12,8 @@ class Chess(GameEye):
 		for line in reversed(linebfen):
 			for char in list(line):
 				if char in ['1','2','3','4','5','6','7','8']:
-					pustych = int(char) ; pleft = pustych ; while pleft>=0: pleft-=1; lista.append('_')
+					pustych = int(char) ; pleft = pustych
+					while pleft>=0: pleft-=1; lista.append('_')
 				elif char in ['r','R','n','N','b','B','q','Q','k','K','p','P']: lista.append(char)
 		assert len(lista)==64
 		boardarray = array(lista)
