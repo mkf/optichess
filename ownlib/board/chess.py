@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 __author__ = 'ArchieT'
 from ownlib.board import GameEye,EmptyFieldInGame,FigureInGame
-from numpy import array
+from numpy import array,ndarray
 class Chess(GameEye):
 	startpoz = ""
 	def __init__(self,fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"): pass
 	@staticmethod
 	def fen2array(fen):
+		if isinstance(fen,ndarray) and fen.shape==(8,8): return fen
 		wholebfen = str(fen).split(' ')[0] ; linebfen = wholebfen.split('/') ; lista = []
 		for line in reversed(linebfen):
 			for char in list(line):
