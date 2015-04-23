@@ -6,16 +6,18 @@ class Chess(GameEye):
 	startpoz = ""
 	def __init__(self,fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"): pass
 	@staticmethod
-	def fen2array(fen):
+	def fen2array(fen,whiteup=True):
+		# use whiteup=False if you want to have a realistic view in str(boardarray)
 		if isinstance(fen,ndarray) and fen.shape==(8,8): return fen
 		wholebfen = str(fen).split(' ')[0] ; linebfen = wholebfen.split('/') ; lista = []
-		for line in reversed(linebfen):
+		for line in (reversed(linebfen) if whiteup else linebfen):
 			for char in list(line):
 				if char in ['1','2','3','4','5','6','7','8']:
 					pustych = int(char) ; pleft = pustych
-					while pleft>=0: pleft-=1; lista.append('_')
+					while pleft>=1: pleft-=1; lista.append('_')
 				elif char in ['r','R','n','N','b','B','q','Q','k','K','p','P']: lista.append(char)
-		assert len(lista)==64
+				else: raise ValueError
+		assert len(lista)==64,str([len(lista),' ',''.join(lista),' ',linebfen,' ',wholebfen])
 		boardarray = array(lista)
 		boardshaped = boardarray.reshape(8,8)
 		return boardshaped
