@@ -27,7 +27,17 @@ class Chess(GameEye):
 		boardarray = array(lista)
 		boardshaped = boardarray.reshape(8,8)
 		return boardshaped
-#	def fenparse(self,fen):
+	def fenparse(self,fen):
+		assert isinstance(fen,str)
+		nfen = str(fen).split(' ')
+		nboard = self.fen2array(nfen[0])
+		if nfen[1]=='w': nactcol = 'w'
+		elif nfen[1]=='b': nactcol = 'b'
+		else: raise AssertionError
+		ncast = {capos:bool(capos in nfen[2]) for capos in ['K','Q','k','q']}
+		nenpass = False if nfen[3]=='-' else nfen[3].upper()
+		nhalfmoveclock = int(nfen[4])
+		nfullclock = int(nfen[5])
 
 
 class EmptyFieldInChess(EmptyFieldInGame): pass
