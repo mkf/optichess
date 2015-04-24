@@ -45,25 +45,26 @@ class Chess(GameEye):
 			if not boardin[self.fields[field]]==boardout[self.fields[field]]:
 				changed[field]=(boardin[self.fields[field]],boardout[self.fields[field]])
 		print changed #debug
-		appear = set() ; disappear = set() ; replace = set() ; anything = False
+		appear = [] ; disappear = [] ; replace = [] ; anything = False
 		figappe = set() ; figdisappe = set() ; figreplfrom = set() ; figreplto = set()
 		for ch in changed:
 			if changed[ch][0]=='_':
-				appear.update((ch,changed[ch][1]))
+				appear.append({'g':ch,'f':changed[ch][1]})
 				figappe.update(changed[ch][1])
 				anything=True
 			elif changed[ch][1]=='_':
-				disappear.update((ch,changed[ch][0]))
+				disappear.append({'g':ch,'f':changed[ch][0]})
 				figdisappe.update(changed[ch][0])
 				anything = True
 			else:
-				replace.update((ch,(changed[ch][0],changed[ch][1])))
+				replace.append({'g':ch,'f':(changed[ch][0],changed[ch][1])})
 				figreplfrom.update(changed[ch][0])
 				figreplto.update(changed[ch][1])
 				anything = True
 		else:
 			if not anything: return None
 		print "Appeared",appear,"Disappeared",disappear,"Replaced",replace
+		print "a",figappe,"d",figdisappe,"rf",figreplfrom,"rt",figreplto
 		if len(appear)==len(disappear):
 			pass
 
