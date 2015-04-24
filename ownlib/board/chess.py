@@ -38,7 +38,16 @@ class Chess(GameEye):
 		nenpass = False if nfen[3]=='-' else nfen[3].upper()
 		nhalfmoveclock = int(nfen[4])
 		nfullclock = int(nfen[5])
-
+		return {'board': nboard,'activecolor':nactcol,'castling':ncast,'enpassant':nenpass,'halfmoveclock':nhalfmoveclock,'fullclock':nfullclock}
+	def findmove(self,boardin,boardout,color,castling,enpassant):
+		changed = {}
+		for field in self.fields:
+			if not boardin[self.fields[field]]==boardout[self.fields[field]]:
+				changed[field]=(boardin[self.fields[field]],boardout[self.fields[field]])
+		print changed #debug
+		for ch in changed:
+			pass
+		else: pass
 
 class EmptyFieldInChess(EmptyFieldInGame): pass
 class ChessFigure(FigureInGame): pass
