@@ -12,7 +12,7 @@ class Chess(GameEye):
 					yield (str("%s%s" % (literkipol[litpol][0],str(numpol+1)[0])),(numpol,litpol))
 		self.fields = {l: k for l,k in pola()}
 	@staticmethod
-	def fen2array(fen,whiteup=True):
+	def fenboard2array(fen,whiteup=True):
 		# use whiteup=False if you want to have a realistic view in str(boardarray)
 		if isinstance(fen,ndarray) and fen.shape==(8,8): return fen
 		wholebfen = str(fen).split(' ')[0] ; linebfen = wholebfen.split('/') ; lista = []
@@ -30,7 +30,7 @@ class Chess(GameEye):
 	def fenparse(self,fen):
 		assert isinstance(fen,str)
 		nfen = str(fen).split(' ')
-		nboard = self.fen2array(nfen[0])
+		nboard = self.fenboard2array(nfen[0])
 		if nfen[1]=='w': nactcol = 'w'
 		elif nfen[1]=='b': nactcol = 'b'
 		else: raise AssertionError
