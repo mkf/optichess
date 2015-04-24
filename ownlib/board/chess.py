@@ -45,9 +45,14 @@ class Chess(GameEye):
 			if not boardin[self.fields[field]]==boardout[self.fields[field]]:
 				changed[field]=(boardin[self.fields[field]],boardout[self.fields[field]])
 		print changed #debug
+		appear = [] ; disappear = [] ; replace = []
 		for ch in changed:
-			pass
-		else: pass
+			if changed[ch][0]=='_': appear.append((ch,changed[ch][1]))
+			elif changed[ch][1]=='_': disappear.append((ch,changed[ch][0]))
+			else: replace.append((ch,(changed[ch][0],changed[ch][1])))
+		else: return None
+		print "Appeared",appear,"Disappeared",disappear,"Replaced",replace
+		if len(appear)==len(disappear): pass
 
 class EmptyFieldInChess(EmptyFieldInGame): pass
 class ChessFigure(FigureInGame): pass
