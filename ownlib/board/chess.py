@@ -41,33 +41,124 @@ class Chess(GameEye):
 		return {'board': nboard,'activecolor':nactcol,'castling':ncast,'enpassant':nenpass,'halfmoveclock':nhalfmoveclock,'fullclock':nfullclock}
 	def findmove(self,boardin,boardout,color,castling,enpassant):
 		changed = {}
+		promotionmaybea = False
+		promotionmaybeb = False
+		promotionmaybe = None
+		promoorcapt = None
 		for field in fieldsdict:
 			if not boardin[fieldsdict[field]]==boardout[fieldsdict[field]]:
 				changed[field]=(boardin[fieldsdict[field]],boardout[fieldsdict[field]])
 		print changed #debug
 		appear = [] ; disappear = [] ; replace = [] ; anything = False
-		figappe = set() ; figdisappe = set() ; figreplfrom = set() ; figreplto = set()
+		figappe = [] ; figdisappe = [] ; figreplfrom = [] ; figreplto = []
 		for ch in changed:
 			if changed[ch][0]=='_':
 				appear.append({'g':ch,'f':changed[ch][1]})
-				figappe.update(changed[ch][1])
+				figappe.append(changed[ch][1])
 				anything=True
 			elif changed[ch][1]=='_':
 				disappear.append({'g':ch,'f':changed[ch][0]})
-				figdisappe.update(changed[ch][0])
+				figdisappe.append(changed[ch][0])
 				anything = True
 			else:
 				replace.append({'g':ch,'f':(changed[ch][0],changed[ch][1])})
-				figreplfrom.update(changed[ch][0])
-				figreplto.update(changed[ch][1])
+				figreplfrom.append(changed[ch][0])
+				figreplto.append(changed[ch][1])
 				anything = True
 		else:
 			if not anything: return None
 		print "Appeared",appear,"Disappeared",disappear,"Replaced",replace
-		print "a",figappe,"d",figdisappe,"rf",figreplfrom,"rt",figreplto
-		figadd = set(list(figappe)+list(figreplto))
-		figdel = set(list(figdisappe)+list(figreplfrom))
+		print "appe",figappe,"disappe",figdisappe,"replfrom",figreplfrom,"replto",figreplto
+		figadd = figappe+figreplto
+		figdel = figdisappe+figreplfrom
 		ruchy = []
+		print "add",figadd,"del",figdel
+		sameprzemiesingle = {}
+		sameprzemiemultiskad = {}
+		sameprzemiemultidokad = {}
+		sameprzemiemultioptions = {}
+		if sorted(figadd)==sorted(figdel):
+			figplus = []; figminus = []; sameones = True; apper = False; disapper = False
+			assert len(replace)==0
+			#if set([figadd.count(i)==1 for i in set(figadd)])=={True}:
+			if figadd==list(set(figadd)):
+				for i in set(figadd):
+					for j in disappear:
+						if j['f']==i: skad = j['g'] ; break
+					else: raise AssertionError
+					for j in appear:
+						if j['f']==i: dokad = j['g'] ; break
+					else: raise AssertionError
+					sameprzemiesingle.update({i: tuple([skad,dokad])})
+			else:
+				pojedyncze = set() ; wielokrotne = {}
+				for i in set(figadd):
+					ileichjest = figadd.count(i)
+					if ileichjest==1: pojedyncze.update(i)
+					elif ileichjest>1: wielokrotne.update({i:ileichjest})
+					else: raise AssertionError
+				for i in pojedyncze:
+					for j in disappear:
+						if j['f']==i: skad = j['g'] ; break
+					else: raise AssertionError
+					for j in appear:
+						if j['f']==i: dokad = j['g'] ; break
+					else: raise AssertionError
+					sameprzemiesingle.update({i: tuple([skad,dokad])})
+				for i in wielokrotne:
+					skad = set()
+					for j in disappear:
+						if j['f']==i: skad.update(j['g'])
+					dokad = set()
+					for j in appear:
+						if j['f']==i: dokad.update(j['g'])
+					assert len(skad)==len(dokad)!=0
+					sameprzemiemultiskad[i] = skad
+					sameprzemiemultidokad[i] = dokad
+					mopt = set()
+					for k in skad:
+						for j in dokad:
+							mopt.add(tuple([k,j]))
+					sameprzemiemultioptions[i] = mopt
+			#TODO
+			if len(figadd)>2: raise TooManyMoved(boardin,boardout)
+			if len(figadd)==2:
+				castleprobably = True
+				if figadd=={'k','r'}:
+					blackcastleprobably = True
+					if sameprzemiesingle=={'r':('H8','F8'),'k':('E8','G8')}: blackcastleKprobably = True
+					elif sameprzemiesingle=={'r':('A8','D8'),'k':('E8','C8')}: blackcastleQprobably = True
+					print "cast:k" if blackcastleKprobably else "cast:q" if blackcastleQprobably else None
+					print castling
+				elif figadd=={'K','R'}:
+					whitecastleprobably = True
+					if sameprzemiesingle=={'R':('H1','F1'),'K':('E1','G1')}: whitecastleKprobably = True
+					elif sameprzemiesingle=={'R':('A1','D1'),'K':('E1','C1')}: whitecastleQprobably = True
+					print "cast:K" if whitecastleKprobably else "cast:Q" if whitecastleQprobably else None
+					print castling
+			sameprzemieoptions = {}
+			sameprzemieoptions.update(sameprzemiemultioptions)
+			sameprzemieoptions.update({p: {sameprzemiesingle[p]} for p in sameprzemiesingle})
+			#TODO
+		else:
+			figplus = list(figadd)
+			for i in figdel:
+				if i in figplus: figplus.remove(i)
+			if sorted(figplus)!=sorted(figreplto): raise SomeNewFigureIsNotAReplacement(boardin,boardout)
+			else: promotionmaybea = True
+			figminus = list(figdel)
+			for i in figadd:
+				if i in figminus: figminus.remove(i)
+			if sorted(figminus)==sorted(figreplfrom):
+				promoorcapt = True
+			sameones = False
+			apper = len(figplus)>0
+			disapper = len(figminus)>0
+			if apper: print "+",figplus
+			if disapper: print "-",figminus
+			assert apper or disapper
+			#TODO
+		#TODO
 
 
 class EmptyFieldInChess(EmptyFieldInGame):
@@ -137,3 +228,12 @@ class ChessCaptEnPassant: pass
 class ChessPromotion: pass
 class ChessCastling: pass
 class ChessReset: pass
+
+class ChessLegalException(Exception):
+	def __init__(self,beforeboard,afterboard):
+		self.beforeboard = self.bef = beforeboard
+		self.afterboard = self.aft = afterboard
+	def __str__(self): return "\n###############\n BEFORE  \n"+str(repr(self.bef))+"\n\n AFTER  \n"+str(repr(self.aft))+"\n----------------\n"
+class TooManyMoved(ChessLegalException): pass
+class TwoMovedAndNotCastling(ChessLegalException): pass
+class SomeNewFigureIsNotAReplacement(ChessLegalException): pass
