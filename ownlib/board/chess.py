@@ -38,8 +38,9 @@ class Chess(GameEye):
 		nenpass = False if nfen[3]=='-' else nfen[3].upper()
 		nhalfmoveclock = int(nfen[4])
 		nfullclock = int(nfen[5])
-		return {'board': nboard,'activecolor':nactcol,'castling':ncast,'enpassant':nenpass,'halfmoveclock':nhalfmoveclock,'fullclock':nfullclock}
+		return {'board': nboard,'activecolor':nactcol,'castling':ncast,'enpassant':nenpass.upper(),'halfmoveclock':nhalfmoveclock,'fullclock':nfullclock}
 	def findmove(self,boardin,boardout,color,castling,enpassant):
+		"""color active, castling and enpassant must refer to the FEN from boardin; boardout is the situation after the move"""
 		changed = {}
 		promotionmaybea = False
 		promotionmaybeb = False
@@ -77,7 +78,7 @@ class Chess(GameEye):
 		sameprzemiemultiskad = {}
 		sameprzemiemultidokad = {}
 		sameprzemiemultioptions = {}
-		if sorted(figadd)==sorted(figdel):
+		if sorted(figadd)==sorted(figdel):  # if there's the same set of figures
 			figplus = []; figminus = []; sameones = True; apper = False; disapper = False
 			assert len(replace)==0
 			#if set([figadd.count(i)==1 for i in set(figadd)])=={True}:
@@ -120,7 +121,7 @@ class Chess(GameEye):
 						for j in dokad:
 							mopt.add(tuple([k,j]))
 					sameprzemiemultioptions[i] = mopt
-			#TODO
+			#TODO: check whether it is ready (it probably is)
 			if len(figadd)>2: raise TooManyMoved(boardin,boardout)
 			if len(figadd)==2:
 				castleprobably = True
@@ -136,11 +137,13 @@ class Chess(GameEye):
 					elif sameprzemiesingle=={'R':('A1','D1'),'K':('E1','C1')}: whitecastleQprobably = True
 					print "cast:K" if whitecastleKprobably else "cast:Q" if whitecastleQprobably else None
 					print castling
+				else: raise TwoMovedAndNotCastling(boardin,boardout)
 			sameprzemieoptions = {}
 			sameprzemieoptions.update(sameprzemiemultioptions)
 			sameprzemieoptions.update({p: {sameprzemiesingle[p]} for p in sameprzemiesingle})
-			#TODO
-		else:
+			#TODO: merge sameprzemieoptions with the analogous dict for the case when samones==False
+		else:   # if some figures are missing or weren't seen last time
+			assert len(figreplto)==len(figreplfrom)
 			figplus = list(figadd)
 			for i in figdel:
 				if i in figplus: figplus.remove(i)
@@ -151,14 +154,24 @@ class Chess(GameEye):
 				if i in figminus: figminus.remove(i)
 			if sorted(figminus)==sorted(figreplfrom):
 				promoorcapt = True
+				if promotionmaybea and len(figreplfrom)==1 and str(figreplfrom[0]).lower()=='p' and \
+								str(figreplfrom[0]).isupper()==str(figreplto[0]).isupper():
+					biel = str(figreplfrom[0]).isupper()
+					czern = str(figreplfrom[0]).islower()
+					assert str(figreplfrom[0]).islower()==str(figreplto[0]).islower()
+					assert (biel or czern)
+					assert not(biel and czern)
+					for i in (['A8','B8','C8','D8','E8','F8','G8','H8'] if biel else ['A1','B1','C1','D1','E1','F1','G1','H1']):
+						if replace[0]['g']==i: promotionmaybeb = True
+						#TODO: not much time atm, to be continued
 			sameones = False
 			apper = len(figplus)>0
 			disapper = len(figminus)>0
 			if apper: print "+",figplus
 			if disapper: print "-",figminus
 			assert apper or disapper
-			#TODO
-		#TODO
+			#TODO: make it analogous to the sameones==True solution
+		#TODO: analyzed the unified dict of options, use some chess lib
 
 
 class EmptyFieldInChess(EmptyFieldInGame):
