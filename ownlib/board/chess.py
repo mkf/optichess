@@ -46,10 +46,13 @@ class Chess(GameEye):
 		promotionmaybeb = False
 		promotionmaybe = None
 		promoorcapt = None
+
 		for field in fieldsdict:
 			if not boardin[fieldsdict[field]]==boardout[fieldsdict[field]]:
 				changed[field]=(boardin[fieldsdict[field]],boardout[fieldsdict[field]])
+		# example: changed=		{'E2':('P','_'),'E4':('_','P')}	{'H7':('P','_'),'G8':('n','Q')}
 		print changed #debug
+
 		appear = [] ; disappear = [] ; replace = [] ; anything = False
 		figappe = [] ; figdisappe = [] ; figreplfrom = [] ; figreplto = []
 		for ch in changed:
@@ -68,12 +71,24 @@ class Chess(GameEye):
 				anything = True
 		else:
 			if not anything: return None
+		# example: appear=		[{'g':'E4','f':'P'}]			[]
+		# example: disappear=	[{'g':'E2','f':'P'}]			[{'g':'H7','f':'P'}]
+		# example: replace=		[]								[{'g':'G8','f':('n','Q')}]
+		# ###################################################################
+		# example: figappe=		['P']							[]
+		# example: figdisappe=	['P']							['P']
+		# example: figreplfrom=	[]								['n']
+		# example: figreplto=	[]								['Q']
 		print "Appeared",appear,"Disappeared",disappear,"Replaced",replace
 		print "appe",figappe,"disappe",figdisappe,"replfrom",figreplfrom,"replto",figreplto
+
 		figadd = figappe+figreplto
 		figdel = figdisappe+figreplfrom
-		ruchy = []
+		# example: figadd=		['P']							['Q']
+		# example: figdel=		['P']							['P','n']
 		print "add",figadd,"del",figdel
+
+		ruchy = []
 		sameprzemiesingle = {}
 		sameprzemiemultiskad = {}
 		sameprzemiemultidokad = {}
