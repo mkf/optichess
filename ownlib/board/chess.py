@@ -99,7 +99,7 @@ class Chess(GameEye):
 		#example:
 		if sorted(figadd)==sorted(figdel):  # if there's the same set of figures
 			figplus = []; figminus = []; sameones = True; apper = False; disapper = False
-			if len(replace)>0: raise SameSetButThereWereReplacements(boardin,boardout)
+			if len(replace)>0: raise SameSetButThereWereReplacements(boardin,boardout) # a en passant?
 			#if set([figadd.count(i)==1 for i in set(figadd)])=={True}:
 			if figadd==list(set(figadd)):
 				for i in set(figadd):
@@ -269,4 +269,4 @@ class ChessLegalException(Exception):
 class TooManyMoved(ChessLegalException): pass
 class TwoMovedAndNotCastling(ChessLegalException): pass
 class SomeNewFigureIsNotAReplacement(ChessLegalException): pass
-class SameSetButThereWereReplacements(ChessLegalException): pass
+class SameSetButThereWereReplacements(ChessLegalException): pass  #chyba w sumie nie bo przecież co z en passant?
