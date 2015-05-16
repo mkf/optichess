@@ -91,12 +91,12 @@ class Chess(GameEye):
 		ruchy = []
 		sameprzemiesingle = {}
 		#example: 				{'P':('E2','E4')}					########
-		sameprzemiemultiskad = {}
-		#example:
-		sameprzemiemultidokad = {}
-		#example:
-		sameprzemiemultioptions = {}
-		#example:
+#		sameprzemiemultiskad = {}
+#		#example:
+#		sameprzemiemultidokad = {}
+#		#example:
+#		sameprzemiemultioptions = {}
+#		#example:
 		if sorted(figadd)==sorted(figdel):  # if there's the same set of figures
 			figplus = []; figminus = []; sameones = True; apper = False; disapper = False
 			if len(replace)>0: raise SameSetButThereWereReplacements(boardin,boardout) # a en passant?
@@ -110,37 +110,37 @@ class Chess(GameEye):
 						if j['f']==i: dokad = j['g'] ; break
 					else: raise AssertionError
 					sameprzemiesingle.update({i: tuple([skad,dokad])})
-			else:
-				pojedyncze = set() ; wielokrotne = {}
-				for i in set(figadd):
-					ileichjest = figadd.count(i)
-					if ileichjest==1: pojedyncze.update(i)
-					elif ileichjest>1: wielokrotne.update({i:ileichjest})
-					else: raise AssertionError
-				for i in pojedyncze:
-					for j in disappear:
-						if j['f']==i: skad = j['g'] ; break
-					else: raise AssertionError
-					for j in appear:
-						if j['f']==i: dokad = j['g'] ; break
-					else: raise AssertionError
-					sameprzemiesingle.update({i: tuple([skad,dokad])})
-				for i in wielokrotne:
-					skad = set()
-					for j in disappear:
-						if j['f']==i: skad.update(j['g'])
-					dokad = set()
-					for j in appear:
-						if j['f']==i: dokad.update(j['g'])
-					assert len(skad)==len(dokad)!=0
-					sameprzemiemultiskad[i] = skad
-					sameprzemiemultidokad[i] = dokad
-					mopt = set()
-					for k in skad:
-						for j in dokad:
-							mopt.add(tuple([k,j]))
-					sameprzemiemultioptions[i] = mopt
-			#TODO: check whether it is ready (it probably is)
+			else: raise MoreThanOneSamePieceMoved(boardin,boardout)
+				# pojedyncze = set() ; wielokrotne = {}
+				# for i in set(figadd):
+				# 	ileichjest = figadd.count(i)
+				# 	if ileichjest==1: pojedyncze.update(i)
+				# 	elif ileichjest>1: wielokrotne.update({i:ileichjest})
+				# 	else: raise AssertionError
+				# for i in pojedyncze:
+				# 	for j in disappear:
+				# 		if j['f']==i: skad = j['g'] ; break
+				# 	else: raise AssertionError
+				# 	for j in appear:
+				# 		if j['f']==i: dokad = j['g'] ; break
+				# 	else: raise AssertionError
+				# 	sameprzemiesingle.update({i: tuple([skad,dokad])})
+				# for i in wielokrotne:
+				# 	skad = set()
+				# 	for j in disappear:
+				# 		if j['f']==i: skad.update(j['g'])
+				# 	dokad = set()
+				# 	for j in appear:
+				# 		if j['f']==i: dokad.update(j['g'])
+				# 	assert len(skad)==len(dokad)!=0
+				# 	sameprzemiemultiskad[i] = skad
+				# 	sameprzemiemultidokad[i] = dokad
+				# 	mopt = set()
+				# 	for k in skad:
+				# 		for j in dokad:
+				# 			mopt.add(tuple([k,j]))
+				# 	sameprzemiemultioptions[i] = mopt
+#			TODO: check whether it is ready (it probably is)
 			if len(figadd)>2: raise TooManyMoved(boardin,boardout)
 			if len(figadd)==2:
 				castleprobably = True
@@ -270,3 +270,4 @@ class TooManyMoved(ChessLegalException): pass
 class TwoMovedAndNotCastling(ChessLegalException): pass
 class SomeNewFigureIsNotAReplacement(ChessLegalException): pass
 class SameSetButThereWereReplacements(ChessLegalException): pass  #chyba w sumie nie bo przecież co z en passant?
+class MoreThanOneSamePieceMoved(ChessLegalException): pass
