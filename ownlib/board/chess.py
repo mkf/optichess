@@ -90,12 +90,16 @@ class Chess(GameEye):
 
 		ruchy = []
 		sameprzemiesingle = {}
+		#example: 				{'P':('E2','E4')}					########
 		sameprzemiemultiskad = {}
+		#example:
 		sameprzemiemultidokad = {}
+		#example:
 		sameprzemiemultioptions = {}
+		#example:
 		if sorted(figadd)==sorted(figdel):  # if there's the same set of figures
 			figplus = []; figminus = []; sameones = True; apper = False; disapper = False
-			assert len(replace)==0
+			if len(replace)>0: raise SameSetButThereWereReplacements(boardin,boardout)
 			#if set([figadd.count(i)==1 for i in set(figadd)])=={True}:
 			if figadd==list(set(figadd)):
 				for i in set(figadd):
@@ -265,3 +269,4 @@ class ChessLegalException(Exception):
 class TooManyMoved(ChessLegalException): pass
 class TwoMovedAndNotCastling(ChessLegalException): pass
 class SomeNewFigureIsNotAReplacement(ChessLegalException): pass
+class SameSetButThereWereReplacements(ChessLegalException): pass
