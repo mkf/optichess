@@ -140,7 +140,6 @@ class Chess(GameEye):
 			# example: figplus=	####								['Q']
 
 			if sorted(figplus)!=sorted(figreplto): raise SomeNewFigureIsNotAReplacement(boardin,boardout)
-			else: promotionmaybea = True
 
 			figminus = list(figdel)
 			for i in figadd:
@@ -148,17 +147,24 @@ class Chess(GameEye):
 			# example: figminus=####								['P','n']
 
 			if sorted(figminus)==sorted(figreplfrom):
-				promoorcapt = True
-				if promotionmaybea and len(figreplfrom)==1 and str(figreplfrom[0]).lower()=='p' and \
-								str(figreplfrom[0]).isupper()==str(figreplto[0]).isupper():
-					biel = str(figreplfrom[0]).isupper()
-					czern = str(figreplfrom[0]).islower()
-					assert str(figreplfrom[0]).islower()==str(figreplto[0]).islower()
-					assert (biel or czern)
-					assert not(biel and czern)
-					for i in (['A8','B8','C8','D8','E8','F8','G8','H8'] if biel else ['A1','B1','C1','D1','E1','F1','G1','H1']):
-						if replace[0]['g']==i: promotionmaybeb = True
-						#TODO: not much time atm, to be continued
+				bielfrom = str(figreplfrom[0]).isupper()
+				czernfrom = str(figreplfrom[0]).islower()
+				assert bielfrom or czernfrom
+				assert not(bielfrom and czernfrom)
+				bielto = str(figreplto[0]).isupper()
+				czernto = str(figreplto[0]).islower()
+				assert bielto or czernto
+				assert not(bielto and czernto)
+				fromkol = 'w' if bielfrom else 'b'
+				tokol = 'w' if bielto else 'b'
+				if fromkol==tokol:
+					assert (bielfrom and bielto) or (czernfrom and czernto)
+					dzialosienakoncu = False
+					for i in (['A8','B8','C8','D8','E8','F8','G8','H8'] if bielfrom else ['A1','B1','C1','D1','E1','F1','G1','H1']):
+						if replace[0]['g']==i: dzialosienakoncu = True
+					print "działo się na końcu" if dzialosienakoncu else "nie na końcu"
+
+			else: raise DisappearedNotReplaced(boardin,boardout)
 			sameones = False
 			apper = len(figplus)>0
 			disapper = len(figminus)>0
@@ -251,3 +257,4 @@ class TwoMovedAndNotCastling(ChessLegalException): pass
 class SomeNewFigureIsNotAReplacement(ChessLegalException): pass
 class SameSetButThereWereReplacements(ChessLegalException): pass  #chyba w sumie nie bo przecież co z en passant?
 class MoreThanOneSamePieceMoved(ChessLegalException): pass
+class DisappearedNotReplaced(ChessLegalException): pass
