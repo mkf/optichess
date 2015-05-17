@@ -133,14 +133,20 @@ class Chess(GameEye):
 			#TODO: merge sameprzemieoptions with the analogous dict for the case when samones==False
 		else:   # if some figures are missing or weren't seen last time
 			assert len(figreplto)==len(figreplfrom)
+
 			figplus = list(figadd)
 			for i in figdel:
 				if i in figplus: figplus.remove(i)
+			# example: figplus=	####								['Q']
+
 			if sorted(figplus)!=sorted(figreplto): raise SomeNewFigureIsNotAReplacement(boardin,boardout)
 			else: promotionmaybea = True
+
 			figminus = list(figdel)
 			for i in figadd:
 				if i in figminus: figminus.remove(i)
+			# example: figminus=####								['P','n']
+
 			if sorted(figminus)==sorted(figreplfrom):
 				promoorcapt = True
 				if promotionmaybea and len(figreplfrom)==1 and str(figreplfrom[0]).lower()=='p' and \
