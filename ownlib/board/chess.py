@@ -128,9 +128,6 @@ class Chess(GameEye):
 					print "cast:K" if whitecastleKprobably else "cast:Q" if whitecastleQprobably else None
 					print castling
 				else: raise TwoMovedAndNotCastling(boardin,boardout)
-			sameprzemieoptions = {}
-			sameprzemieoptions.update(sameprzemiemultioptions)
-			sameprzemieoptions.update({p: {sameprzemiesingle[p]} for p in sameprzemiesingle})
 			#TODO: merge sameprzemieoptions with the analogous dict for the case when samones==False
 		else:   # if some figures are missing or weren't seen last time
 			assert len(figreplto)==len(figreplfrom)
