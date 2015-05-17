@@ -38,7 +38,7 @@ class Chess(GameEye):
 		nenpass = False if nfen[3]=='-' else nfen[3].upper()
 		nhalfmoveclock = int(nfen[4])
 		nfullclock = int(nfen[5])
-		return {'board': nboard,'activecolor':nactcol,'castling':ncast,'enpassant':nenpass.upper(),'halfmoveclock':nhalfmoveclock,'fullclock':nfullclock}
+		return {'board': nboard,'activecolor':nactcol,'castling':ncast,'enpassant':nenpass.upper() if nenpass!=False else nenpass,'halfmoveclock':nhalfmoveclock,'fullclock':nfullclock}
 	def findmovehelper(self,fenin,fenout):
 		fi = self.fenparse(fenin) ; fo = self.fenparse(fenout)
 		return self.findmove(fi['board'],fo['board'],fi['activecolor'],fi['castling'],fi['enpassant'])
