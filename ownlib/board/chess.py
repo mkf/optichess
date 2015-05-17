@@ -113,7 +113,7 @@ class Chess(GameEye):
 			else: raise MoreThanOneSamePieceMoved(boardin,boardout)
 #			TODO: ?
 			if len(figadd)>2: raise TooManyMoved(boardin,boardout)
-			if len(figadd)==2:
+			elif len(figadd)==2:
 				castleprobably = True
 				if figadd=={'k','r'}:
 					blackcastleprobably = True
@@ -128,6 +128,8 @@ class Chess(GameEye):
 					print "cast:K" if whitecastleKprobably else "cast:Q" if whitecastleQprobably else None
 					print castling
 				else: raise TwoMovedAndNotCastling(boardin,boardout)
+			elif len(figadd)==1: print "Just one same-set move; I'm here!"
+			elif len(figadd)==0: raise NoMoves(boardin,boardout)
 			#TODO: merge sameprzemieoptions with the analogous dict for the case when samones==False
 		else:   # if some figures are missing or weren't seen last time
 			assert len(figreplto)==len(figreplfrom)
@@ -235,6 +237,10 @@ class ChessLegalException(Exception):
 		self.afterboard = self.aft = afterboard
 	def __str__(self): return "\n###############\n BEFORE  \n"+str(repr(self.bef))+"\n\n AFTER  \n"+str(repr(self.aft))+"\n----------------\n"
 class TooManyMoved(ChessLegalException): pass
+class NoMoves(ChessLegalException):
+	def __init__(self,beforeboard,afterboard):
+		ChessLegalException.__init__(self,beforeboard,afterboard)
+		assert beforeboard==afterboard,"No moves but boards differ\n"+str(beforeboard)+'\n'+str(afterboard)
 class TwoMovedAndNotCastling(ChessLegalException): pass
 class SomeNewFigureIsNotAReplacement(ChessLegalException): pass
 class SameSetButThereWereReplacements(ChessLegalException): pass  #chyba w sumie nie bo przecież co z en passant?
