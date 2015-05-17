@@ -39,8 +39,8 @@ class Chess(GameEye):
 		nhalfmoveclock = int(nfen[4])
 		nfullclock = int(nfen[5])
 		return {'board': nboard,'activecolor':nactcol,'castling':ncast,'enpassant':nenpass.upper(),'halfmoveclock':nhalfmoveclock,'fullclock':nfullclock}
-	def findmovehelper(self,fenparsedictin,fenparsedictout):
-		fi = fenparsedictin ; fo = fenparsedictout
+	def findmovehelper(self,fenin,fenout):
+		fi = self.fenparse(fenin) ; fo = self.fenparse(fenout)
 		return self.findmove(fi['board'],fo['board'],fi['activecolor'],fi['castling'],fi['enpassant'])
 	def findmove(self,boardin,boardout,color,castling,enpassant):
 		"""color active, castling and enpassant must refer to the FEN from boardin; boardout is the situation after the move"""
