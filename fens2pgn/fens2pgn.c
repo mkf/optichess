@@ -303,7 +303,7 @@ int main(int argc, char *argv[])
 			return 0;
 		case P_Version:
 			printf("fens2pgn %s\n"
-			"Copyright (C) 2014 Paweł Zacharek\n", STR(VERSION));
+			"Copyright (C) 2015 Paweł Zacharek\n", STR(VERSION));
 			return 0;
 	}
 	FILE *input = (parameters.read_from_file == '\0' ? stdin : fopen(parameters.read_from_file, "r"));
