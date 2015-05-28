@@ -17,14 +17,9 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.2.0
- * date: 2015-05-26
+ * version 0.2.2
+ * date: 2015-05-28
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
- */
-
-/* TODO list:
- * checkmate indication character
- * validation of input data
  */
 
 #include <errno.h>
@@ -33,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.2.0
+#define VERSION 0.2.2
 
 /* to store the longest hypothetical piece placement field in FEN:
    "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -69,6 +64,8 @@ struct structure_instruction {
 
 // lists directions in which a bishop can move
 struct structure_instruction instructions_bishop[4] = {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}};
+// instructions how to "jump" to all fields reachable by a king
+struct structure_instruction instructions_king[8] = {{1, 0}, {0, 1}, {-1, 0}, {-1, 0}, {0, -1}, {0, -1}, {1, 0}, {1, 0}};
 // instructions how to "jump" to all fields reachable by a knight
 struct structure_instruction instructions_knight[8] = {{-2, 1}, {1, 1}, {2, 0}, {1, -1}, {0, -2}, {-1, -1}, {-2, 0}, {-1, 1}};
 // lists directions in which a rook can move
@@ -89,7 +86,7 @@ char capitalized(const char letter)
 	return letter;
 }
 
-// Function writes all differences between boards to array 'distinctions'.
+// Function writes all (if not too many) differences between boards to array 'distinctions'.
 static inline signed char compare_boards(const char (*board_1)[8], const char (*board_2)[8], struct structure_field distinctions[])
 {
 	signed char differences = 0;
@@ -179,6 +176,29 @@ signed char is_king_checked(const struct structure_field *field, const char (*bo
 	return number_of_checks;
 }
 
+// Determines if king cannot move.
+bool does_king_cannot_move(const struct structure_field *field, char (*board)[8])
+{
+	const char Base = field->piece_after - ('K' - 'A');
+	const signed char A = field->alphabetical - 'a', B = field->numerical - 1;
+	struct structure_field king = {field->alphabetical, field->numerical, field->piece_before, field->piece_after};
+	board[8 - (B + 1)][A] = ' ';  // king is temporarily removed
+	for (signed char i = 0, x, y; i < 8; ++i) {
+		king.alphabetical += instructions_king[i].to_x;
+		king.numerical += instructions_king[i].to_y;
+		x = king.alphabetical - 'a';
+		y = king.numerical - 1;
+		if (board[8 - (B + 1)][A] >= Base && board[8 - (B + 1)][A] <= Base + ('Z' - 'A'))  // king can't capture it's own piece
+			continue;
+		if (is_king_checked(field, (const char (*)[8])board) != 0)  // this field is attacked
+			continue;
+		board[8 - (B + 1)][A] = field->piece_after;  // king returns to it's field
+		return 0;
+	}
+	board[8 - (B + 1)][A] = field->piece_after;  // king returns to it's field
+	return 1;
+}
+
 /* This function exists for disambiguation purposes.
    Piece 'piece' from coords (previous_a, previous_b) didn't move. Instead we'll
    move the same type of piece from coords (new_a, new_b). The question is:
@@ -200,63 +220,21 @@ bool is_king_defended_after_move(char piece, signed char new_a, signed char new_
 	return 0;
 }
 
-// A part of code shared between 'find_competing_piece_diagonally' and 'find_competing_piece_horizontally_and_vertically'.
-void increment_and_check(char piece, signed char a, signed char b, signed char previous_a, signed char previous_b, const char (*board)[8], bool *is_other, bool *in_line, bool *in_column, const signed char to_x, const signed char to_y)
+// Searches horizontally or vertically for a competing piece from the field we just moved into.
+void increment_and_check(char piece, signed char x, signed char y, signed char previous_x, signed char previous_y, const char (*board)[8], bool *is_other, bool *in_line, bool *in_column, const signed char to_x, const signed char to_y)
 {
-	for (signed char x = a, y = b; x >= 0 && x < 8 && y >= 0 && y < 8 && !(x == previous_a && y == previous_b); x += to_x, y += to_y)
-		if (board[8 - (y + 1)][x] == piece)
-			if (is_king_defended_after_move(piece, x, y, previous_a, previous_b, board)) {
-				if (x == previous_a)
+	while (x >= 0 && x < 8 && y >= 0 && y < 8 && !(x == previous_x && y == previous_y)) {
+		if (board[8 - (y + 1)][x] == piece)  // we found the same type of piece in the same color
+			if (is_king_defended_after_move(piece, x, y, previous_x, previous_y, board)) {  // we must disambiguate our last move
+				if (x == previous_x)
 					*in_column = 1;
-				if (y == previous_b)
+				if (y == previous_y)
 					*in_line = 1;
 				*is_other = 1;
 			}
-	return;
-}
-
-// Search for a competing knight.
-static inline void find_competing_piece_knight(const struct structure_field *field, const struct structure_field *previous_field, const char (*board)[8], bool *is_other, bool *in_line, bool *in_column)
-{
-	char piece = field->piece_after;
-	signed char a = field->alphabetical - 'a', b = field->numerical - 1;
-	signed char previous_a = previous_field->alphabetical - 'a', previous_b = previous_field->numerical - 1;
-	for (signed char x = a, y = b, i = 0; i < 8; ++i) {
-		x += instructions_knight[i].to_x;
-		y += instructions_knight[i].to_y;
-		if (x < 0 || x >= 8 || y < 0 || y >= 8 || x == previous_a && y == previous_b)
-			continue;
-		if (board[8 - (y + 1)][x] == piece)
-			if (is_king_defended_after_move(piece, x, y, previous_a, previous_b, board)) {
-				if (x == previous_a)
-					*in_column = 1;
-				if (y == previous_b)
-					*in_line = 1;
-				*is_other = 1;
-			}
+		x += to_x;
+		y += to_y;
 	}
-	return;
-}
-
-// Search for a competing bishop or queen.
-void find_competing_piece_diagonally(const struct structure_field *field, const struct structure_field *previous_field, const char board[8][8], bool *is_other, bool *in_line, bool *in_column)
-{
-	char piece = field->piece_after;
-	signed char a = field->alphabetical - 'a', b = field->numerical - 1;
-	signed char previous_a = previous_field->alphabetical - 'a', previous_b = previous_field->numerical - 1;
-	for (int i = 0; i < 4; ++i)
-		increment_and_check(piece, a, b, previous_a, previous_b, board, is_other, in_line, in_column, instructions_bishop[i].to_x, instructions_bishop[i].to_y);
-	return;
-}
-
-// Search for a competing rook or queen.
-void find_competing_piece_horizontally_and_vertically(const struct structure_field *field, const struct structure_field *previous_field, const char board[8][8], bool *is_other, bool *in_line, bool *in_column)
-{
-	char piece = field->piece_after;
-	signed char a = field->alphabetical - 'a', b = field->numerical - 1;
-	signed char previous_a = previous_field->alphabetical - 'a', previous_b = previous_field->numerical - 1;
-	for (int i = 0; i < 4; ++i)
-		increment_and_check(piece, a, b, previous_a, previous_b, board, is_other, in_line, in_column, instructions_rook[i].to_x, instructions_rook[i].to_y);
 	return;
 }
 
@@ -268,6 +246,8 @@ int find_competiting_piece(const char board[8][8], const struct structure_field 
 {
 	bool is_other = 0, in_line = 0, in_column = 0;
 	char piece = field->piece_after;
+	const signed char A = field->alphabetical - 'a', B = field->numerical - 1;
+	const signed char Previous_A = previous_field->alphabetical - 'a', Previous_B = previous_field->numerical - 1;
 	if (previous_field->piece_before != field->piece_after)  // pawn promotion
 		piece = '@';  // from this time '@' stands for a pawn promotion
 	switch (piece) {
@@ -278,20 +258,37 @@ int find_competiting_piece(const char board[8][8], const struct structure_field 
 			return (field->piece_before != ' ' ? F_Pawn_Capture : F_Pawn_None);
 		case 'r':
 		case 'R':
-			find_competing_piece_horizontally_and_vertically(field, previous_field, board, &is_other, &in_line, &in_column);
+			for (signed char i = 0; i < 4; ++i)
+				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_rook[i].to_x, instructions_rook[i].to_y);
 			break;
 		case 'n':
 		case 'N':
-			find_competing_piece_knight(field, previous_field, board, &is_other, &in_line, &in_column);
+			for (signed char x = A, y = B, i = 0; i < 8; ++i) {
+				x += instructions_knight[i].to_x;
+				y += instructions_knight[i].to_y;
+				if (x < 0 || x >= 8 || y < 0 || y >= 8 || x == Previous_A && y == Previous_B)  // we're out of the board
+					continue;
+				if (board[8 - (y + 1)][x] == piece)  // an competing knight is found
+					if (is_king_defended_after_move(piece, x, y, Previous_A, Previous_B, board)) {  // we must disambiguate our last move
+						if (x == Previous_A)
+							in_column = 1;
+						if (y == Previous_B)
+							in_line = 1;
+						is_other = 1;
+					}
+			}
 			break;
 		case 'b':
 		case 'B':
-			find_competing_piece_diagonally(field, previous_field, board, &is_other, &in_line, &in_column);
+			for (signed char i = 0; i < 4; ++i)
+				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_bishop[i].to_x, instructions_bishop[i].to_y);
 			break;
 		case 'q':
 		case 'Q':
-			find_competing_piece_horizontally_and_vertically(field, previous_field, board, &is_other, &in_line, &in_column);
-			find_competing_piece_diagonally(field, previous_field, board, &is_other, &in_line, &in_column);
+			for (signed char i = 0; i < 4; ++i)
+				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_rook[i].to_x, instructions_rook[i].to_y);
+			for (signed char i = 0; i < 4; ++i)
+				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_bishop[i].to_x, instructions_bishop[i].to_y);
 			break;
 		case 'k':
 		case 'K':
@@ -522,15 +519,20 @@ int main(int argc, char *argv[])
 				break;
 		}
 		fprintf(output, "%s%s", store_space, store_move);
-		if (find_piece(whose_move == 'w' ? 'k' : 'K', &king_placement, (const char (*)[8])board_2))
-			switch (is_king_checked((const struct structure_field *)&king_placement, (const char (*)[8])board_2)) {
-				case 2:
-					putc('+', output);
-				case 1:
-					putc('+', output);
-				default:
-					break;
-			}
+		if (find_piece(whose_move == 'w' ? 'k' : 'K', &king_placement, (const char (*)[8])board_2)) {
+			signed char exit_code = is_king_checked((const struct structure_field *)&king_placement, (const char (*)[8])board_2);
+			if (exit_code != 0 && does_king_cannot_move((const struct structure_field *)&king_placement, board_2) == 1)
+				putc('#', output);
+			else
+				switch (exit_code) {
+					case 2:
+						putc('+', output);
+					case 1:
+						putc('+', output);
+					default:
+						break;
+				}
+		}
 		first_move_number_already_written = 1;
 		if (whose_move == 'b') {
 			++move_number;
