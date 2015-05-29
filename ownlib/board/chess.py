@@ -133,7 +133,7 @@ class Chess(GameEye):
 				else: raise TwoMovedAndNotCastling(boardin,boardout)
 			elif len(figadd)==1: print "Just one same-set move; I'm here!"
 			elif len(figadd)==0: raise NoMoves(boardin,boardout)
-			#TODO: merge sameprzemieoptions with the analogous dict for the case when samones==False
+			#TODO: write what happens when samones==False
 		else:   # if some figures are missing or weren't seen last time
 			assert len(figreplto)==len(figreplfrom)
 
