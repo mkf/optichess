@@ -17,8 +17,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.2.3
- * date: 2015-05-29
+ * version 0.2.5
+ * date: 2015-05-30
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
 
@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.2.3
+#define VERSION 0.2.5
 
 /* to store the longest hypothetical piece placement field in FEN:
    "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -78,6 +78,13 @@ struct structure_parameters {
 	char *read_from_file;
 	char *write_to_file;
 };
+
+struct structure_suffixes {
+	char st[3];
+	char nd[3];
+	char rd[3];
+	char th[3];
+} suffixes = {"st", "nd", "rd", "th"};
 
 char capitalized(char letter)
 {
@@ -133,21 +140,14 @@ bool find_piece(char piece, struct structure_field *field, const char (*board)[8
 	return 0;
 }
 
-// Returns a piece occupying given coordinates.
-char piece_on_field(char alphabetical, signed char numerical, const char (*board)[8])
-{
-	const signed char A = alphabetical - 'a', B = numerical - 1;
-	return board[8 - (B + 1)][A];
-}
-
 /* Returns the first piece encountered by simultaneously incrementing coordinates
    by values 'to_x' and 'to_y'. If no piece has been found, the function returns
    space sign. Used to determine if king is under attack */
 char increment_and_return_encountered_piece(char x, signed char y, char to_x, signed char to_y, const char (*board)[8])
 {
 	for (x += to_x, y += to_y; x >= 'a' && x <= 'h' && y >= 1 && y <= 8; x += to_x, y += to_y)
-		if (piece_on_field(x, y, board) != ' ')
-			return piece_on_field(x, y, board);
+		if (board[8 - y][x - 'a'] != ' ')
+			return board[8 - y][x - 'a'];
 	return ' ';
 }
 
@@ -174,7 +174,7 @@ signed char is_king_checked(char king, char x, signed char y, const char (*board
 		y += instructions_knight[i].to_y;
 		if (x < 'a' || x > 'h' || y < 1 || y > 8)  // we jumped out of the board
 			continue;
-		if (piece_on_field(x, y, board) == Base + 'N')
+		if (board[8 - y][x - 'a'] == Base + 'N')
 			if (++number_of_checks >= 2)
 				return number_of_checks;
 	}
@@ -191,7 +191,7 @@ bool does_king_cannot_move(const struct structure_field *field, char (*board)[8]
 	for (signed char i = 0, x, y; i < 8; ++i) {
 		x = A + instructions_king[i].to_x;
 		y = B + instructions_king[i].to_y;
-		if (piece_on_field(x, y, (const char (*)[8])board) >= Base && piece_on_field(x, y, (const char (*)[8])board) <= Base + ('Z' - 'A'))  // king can't capture it's own piece
+		if (board[8 - y][x - 'a'] >= Base && board[8 - y][x - 'a'] <= Base + ('Z' - 'A'))  // king can't capture it's own piece
 			continue;
 		if (is_king_checked(field->piece_after, x, y, (const char (*)[8])board) != 0)  // this field is attacked
 			continue;
@@ -208,7 +208,7 @@ bool does_king_cannot_move(const struct structure_field *field, char (*board)[8]
    Does after this move our king will be save? */
 bool is_king_defended_after_move(char piece, char new_x, signed char new_y, char previous_x, signed char previous_y, const char (*board)[8])
 {
-	char king = (piece >= 'A' && piece <= 'Z') ? 'K' : 'k';  // white king can't be under attack after white's move
+	char king = (piece >= 'A' && piece <= 'Z' ? 'K' : 'k');  // white king can't be under attack after white's move
 	char (*new_board)[8] = (char (*)[8])malloc(8 * 8 * sizeof(char));
 	memcpy(new_board, board, 8 * 8 * sizeof(char));
 	new_board[8 - previous_y][previous_x - 'a'] = piece;
@@ -227,7 +227,7 @@ bool is_king_defended_after_move(char piece, char new_x, signed char new_y, char
 void increment_and_check(char piece, char x, signed char y, char previous_x, signed char previous_y, const char (*board)[8], bool *is_other, bool *in_line, bool *in_column, char to_x, signed char to_y)
 {
 	while (x >= 'a' && x <= 'h' && y >= 1 && y <= 8 && !(x == previous_x && y == previous_y)) {
-		if (piece_on_field(x, y, board) == piece)  // we found the same type of piece in the same color
+		if (board[8 - y][x - 'a'] == piece)  // we found the same type of piece in the same color
 			if (is_king_defended_after_move(piece, x, y, previous_x, previous_y, board)) {  // we must disambiguate our last move
 				if (x == previous_x)
 					*in_column = 1;
@@ -271,7 +271,7 @@ int find_competiting_piece(const char (*board)[8], const struct structure_field 
 				y += instructions_knight[i].to_y;
 				if (x < 'a' || x > 'h' || y < 1 || y > 8 || x == Previous_A && y == Previous_B)
 					continue;
-				if (piece_on_field(x, y, board) == piece)  // an competing knight is found
+				if (board[8 - y][x - 'a'] == piece)  // an competing knight is found
 					if (is_king_defended_after_move(piece, x, y, Previous_A, Previous_B, board)) {  // we must disambiguate our last move
 						if (x == Previous_A)
 							in_column = 1;
@@ -306,6 +306,19 @@ int find_competiting_piece(const char (*board)[8], const struct structure_field 
 	if (is_other == 1)
 		return F_Other;
 	return F_None;
+}
+
+char *ordinal_number_suffix(int number)
+{
+	if (number % 100 >= 11 && number % 100 <= 13)
+		return suffixes.th;
+	if (number % 10 == 1)
+		return suffixes.st;
+	if (number % 10 == 2)
+		return suffixes.nd;
+	if (number % 10 == 3)
+		return suffixes.rd;
+	return suffixes.th;
 }
 
 static inline int read_parameters(int argc, char *argv[], struct structure_parameters *parameters)
@@ -463,11 +476,11 @@ int main(int argc, char *argv[])
 		number_of_differences = compare_boards((const char (*)[8])board_1, (const char (*)[8])board_2, distinctions);
 		if (number_of_differences < 2) {
 			if (parameters.verbose == 1)
-				fprintf(stderr, "Skipped \"%s\" (%d%s FEN).\n", fen_buffer, fen_number, fen_number % 10 == 1 ? "st" : fen_number % 10 == 2 ? "nd" : "th");
+				fprintf(stderr, "Skipped \"%s\" (%d%s FEN).\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
 			continue;
 		}
 		if (number_of_differences > 4) {
-			fprintf(stderr, "Can't compare \"%s\" (%d%s FEN) with the previous one.\n", fen_buffer, fen_number, fen_number % 10 == 1 ? "st" : fen_number % 10 == 2 ? "nd" : "th");
+			fprintf(stderr, "Can't compare \"%s\" (%d%s FEN) with the previous one.\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
 			return EILSEQ;
 		}
 		if (first_move_number_already_written == 1)
@@ -523,8 +536,7 @@ int main(int argc, char *argv[])
 		}
 		fprintf(output, "%s%s", store_space, store_move);
 		if (find_piece(whose_move == 'w' ? 'k' : 'K', &king_placement, (const char (*)[8])board_2)) {
-			signed char exit_code = is_king_checked(king_placement.piece_after, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2);
-			switch (exit_code) {
+			switch (is_king_checked(king_placement.piece_after, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2)) {
 				case 2:
 					if (does_king_cannot_move((const struct structure_field *)&king_placement, board_2) == 1)
 						putc('#', output);
