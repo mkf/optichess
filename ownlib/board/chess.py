@@ -142,7 +142,7 @@ class Chess(GameEye):
 				if i in figplus: figplus.remove(i)
 			# example: figplus=	####								['Q']
 
-			if sorted(figplus)!=sorted(figreplto):  #TODO: maybe figadd not figplus?
+			if len(figplus)>0 and sorted(figplus)!=sorted(figreplto):  #TODO: maybe figadd not figplus?
 				print "figplus",figplus,"figreplto",figreplto
 				raise SomeNewFigureIsNotAReplacement(boardin,boardout)
 
