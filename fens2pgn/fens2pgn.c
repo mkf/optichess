@@ -17,18 +17,19 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.2.6
+ * version 0.3.0
  * date: 2015-05-31
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.2.6
+#define VERSION 0.3.0
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -43,7 +44,8 @@
 
 enum find_competiting_piece_exit_codes {
 	F_None, F_In_Line, F_In_Column, F_Both, F_Other,
-	F_Pawn_None, F_Pawn_Capture, F_Pawn_Promotion, F_Pawn_Capture_Promotion
+	F_Pawn_None, F_Pawn_Capture, F_Pawn_Promotion, F_Pawn_Capture_Promotion,
+	F_Discard_FEN
 };
 
 enum read_parameters_exit_codes {
@@ -75,7 +77,7 @@ struct structure_instruction instructions_rook[4] = {{0, 1}, {1, 0}, {0, -1}, {-
 struct structure_instruction instructions_pawn[4] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
 
 struct structure_parameters {
-	bool validate;  // TODO: make use of this variable in array 'parameters' in function 'main'
+	bool validate;
 	bool quiet;
 	bool verbose;
 	char *read_from_file;
@@ -95,14 +97,6 @@ bool are_coords_valid(char x, signed char y)
 	if (x >= 'a' && x <= 'h' && y >= 1 && y <= 8)
 		return 1;
 	return 0;
-}
-
-
-char capitalized(char letter)
-{
-	if (letter >= 'a')
-		return letter - ('a' - 'A');
-	return letter;
 }
 
 // Function writes all (if not too many) differences between boards to array 'distinctions'.
@@ -270,8 +264,8 @@ void increment_and_check(char piece, char x, signed char y, char previous_x, sig
 /* Function determines if in the 'board' there are pieces of type 'field->piece_after',
  * which can in one move go to the coordinates ('field->alphabetical', 'field->numerical')
  * and if their coordinates (previous_field->alphabetical, previous_field->numerical) collide with them.
- * Pawn is instead treated specially. */
-int find_competiting_piece(const char (*board)[8], const struct structure_field *field, const struct structure_field *previous_field)
+ * Pawn is instead treated specially. */  // TODO: make use of 'validate' parameter
+int find_competiting_piece(const char (*board)[8], const struct structure_field *field, const struct structure_field *previous_field, bool validate)
 {
 	bool is_other = 0, in_line = 0, in_column = 0;
 	char piece = field->piece_after;
@@ -415,7 +409,7 @@ int main(int argc, char *argv[])
 			puts("fens2pgn - converts multiple FENs into single PGN file\n"
 			"Syntax: fens2pgn [arguments] [output file] [input file]\n"
 			"Arguments:\n"
-			"  -f    force validity of every FEN (unused so far)\n"
+			"  -f    force validity of every chess move\n"
 			"  -o    take next argument as output file\n"
 			"  -q    quiet - don't display information about omitted FENs and such to stderr\n"
 			"  -v    verbose - notify of every skipped FEN\n"
@@ -449,10 +443,10 @@ int main(int argc, char *argv[])
 	int fen_number = 1, move_number = 1, number_of_written_moves = 0;
 	struct structure_field distinctions[4], *field, *previous_field, king_placement;
 	signed char number_of_differences;
-	char control_character, whose_move = 'w';
+	char control_character, whose_move = 'w', castling_prospects[4 + 1] = "KQkq", en_passant_field[2 + 1] = "-";
 	char control_string[8 + 1], result[7 + 1];  // to store respectively "Result \"" and "1/2-1/2"
 	result[0] = '\0';
-	bool metadata_included = 0, fens_are_incomplete = 0, first_move_number_already_written = 0;
+	bool metadata_included = 0, fens_are_incomplete = 0, first_move_number_already_written = 0, move_is_invalid = 0;
 	// beginning of METADATA section
 	fscanf(input, " %c", &control_character);
 	while (control_character == '[') {
@@ -480,12 +474,14 @@ int main(int argc, char *argv[])
 	++fen_number;
 	sscanf(fen_buffer, "%" STR(MAX_PLACEMENT_LENGHT) "[1-8/rnbqkpRNBQKP]", fen_placement_buffer);
 	if (strncmp(fen_buffer, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 56) != 0) {  // it isn't classical complete FEN
-		if (sscanf(fen_buffer, "%*[1-8/rnbqkpRNBQKP] %c %*s %*s %*d %d", &whose_move, &move_number) != 2) {  // FENs are incomplete
+		if (sscanf(fen_buffer, "%*[1-8/rnbqkpRNBQKP] %c %4s %2s %*d %d", &whose_move, castling_prospects, en_passant_field, &move_number) != 4) {  // FENs are incomplete
 			fens_are_incomplete = 1;
 			if (parameters.quiet != 1)
 				fputs("FENs considered incomplete.\n", stderr);  // not corrupts redirected output
-			move_number = 1;
 			whose_move = 'w';
+			strcpy(castling_prospects, "KQkq");
+			strcpy(en_passant_field, "-");
+			move_number = 1;
 		}
 		if (fens_are_incomplete == 0 || strncmp(fen_buffer, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR", 43) != 0)  // starting position isn't classical
 			fprintf(output, "[SetUp \"1\"]\n[FEN \"%s\"]\n", fen_buffer);
@@ -509,10 +505,6 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Can't compare \"%s\" (%d%s FEN) with the previous one.\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
 			return EILSEQ;
 		}
-		if (first_move_number_already_written == 1)
-			strcpy(store_space, whose_move == 'w' && number_of_written_moves % 7 == 0 ? "\n" : " ");
-		if (whose_move == 'w' || first_move_number_already_written == 0)
-			snprintf(store_space + (first_move_number_already_written ? 1 : 0), STORE_SPACE_SIZE + 1 - (first_move_number_already_written ? 1 : 0), "%d. ", move_number);
 		switch (number_of_differences) {
 			case 2:  // ordinary move or capture
 				if (distinctions[0].piece_after != ' ') {
@@ -522,7 +514,7 @@ int main(int argc, char *argv[])
 					field = &distinctions[1];
 					previous_field = &distinctions[0];
 				}
-				switch (find_competiting_piece((const char (*)[8])board_2, (const struct structure_field *)field, (const struct structure_field *)previous_field)) {
+				switch (find_competiting_piece((const char (*)[8])board_2, (const struct structure_field *)field, (const struct structure_field *)previous_field, parameters.validate)) {
 					case F_Pawn_None:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "%c%hhd", field->alphabetical, field->numerical);
 						break;
@@ -530,36 +522,79 @@ int main(int argc, char *argv[])
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", previous_field->alphabetical, field->alphabetical, field->numerical);
 						break;
 					case F_Pawn_Promotion:
-						snprintf(store_move, STORE_MOVE_SIZE + 1, "%c%hhd=%c", field->alphabetical, field->numerical, capitalized(field->piece_after));
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%c%hhd=%c", field->alphabetical, field->numerical, toupper(field->piece_after));
 						break;
 					case F_Pawn_Capture_Promotion:
-						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd=%c", previous_field->alphabetical, field->alphabetical, field->numerical, capitalized(field->piece_after));
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd=%c", previous_field->alphabetical, field->alphabetical, field->numerical, toupper(field->piece_after));
 						break;
 					case F_None:
-						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%cx%c%hhd" : "%c%c%hhd", capitalized(field->piece_after), field->alphabetical, field->numerical);
+						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%cx%c%hhd" : "%c%c%hhd", toupper(field->piece_after), field->alphabetical, field->numerical);
 						break;
 					case F_In_Line:
 					case F_Other:
-						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%c%cx%c%hhd" : "%c%c%c%hhd", capitalized(field->piece_after), previous_field->alphabetical, field->alphabetical, field->numerical);
+						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%c%cx%c%hhd" : "%c%c%c%hhd", toupper(field->piece_after), previous_field->alphabetical, field->alphabetical, field->numerical);
 						break;
 					case F_In_Column:
-						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%c%hhdx%c%hhd" : "%c%hhd%c%hhd", capitalized(field->piece_after), previous_field->numerical, field->alphabetical, field->numerical);
+						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%c%hhdx%c%hhd" : "%c%hhd%c%hhd", toupper(field->piece_after), previous_field->numerical, field->alphabetical, field->numerical);
 						break;
 					case F_Both:
-						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%c%c%hhdx%c%hhd" : "%c%c%hhd%c%hhd", capitalized(field->piece_after), previous_field->alphabetical, previous_field->numerical, field->alphabetical, field->numerical);
+						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%c%c%hhdx%c%hhd" : "%c%c%hhd%c%hhd", toupper(field->piece_after), previous_field->alphabetical, previous_field->numerical, field->alphabetical, field->numerical);
+						break;
+					case F_Discard_FEN:
+						move_is_invalid = 1;
 						break;
 					}
 				break;
 			case 3:  // en passant capture
-				if (whose_move == 'w')
-					snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[2].alphabetical, distinctions[0].alphabetical != distinctions[2].alphabetical ? distinctions[0].alphabetical : distinctions[1].alphabetical, distinctions[2].numerical + 1);
-				else
-					snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[0].alphabetical, distinctions[1].alphabetical != distinctions[0].alphabetical ? distinctions[1].alphabetical : distinctions[2].alphabetical, distinctions[0].numerical + 1);
+				if (parameters.validate != 1) {
+					if (whose_move == 'w')
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[0].alphabetical == distinctions[2].alphabetical ? distinctions[1].alphabetical : distinctions[2].alphabetical, distinctions[0].alphabetical, distinctions[0].numerical);
+					else
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[0].alphabetical == distinctions[2].alphabetical ? distinctions[1].alphabetical : distinctions[0].alphabetical, distinctions[2].alphabetical, distinctions[2].numerical);
+				} else {
+					char all_fields[6 + 1];
+					snprintf(all_fields, 6 + 1, "%c%c%c%c%c%c", distinctions[0].piece_before, distinctions[0].piece_after, distinctions[1].piece_before, distinctions[1].piece_after, distinctions[2].piece_before, distinctions[2].piece_after);
+					if (whose_move == 'w' && distinctions[0].alphabetical == distinctions[2].alphabetical && en_passant_field[0] == distinctions[0].alphabetical && en_passant_field[1] == distinctions[0].numerical && memcmp(all_fields, " PP p ", 6) == 0)  // NOTE: even now some conditions are missing
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[1].alphabetical, distinctions[0].alphabetical, distinctions[0].numerical);
+					else if (whose_move == 'w' && distinctions[0].alphabetical != distinctions[2].alphabetical && en_passant_field[0] == distinctions[0].alphabetical && en_passant_field[1] == distinctions[0].numerical && memcmp(all_fields, " Pp P ", 6) == 0)  // NOTE: even now some conditions are missing
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[2].alphabetical, distinctions[0].alphabetical, distinctions[0].numerical);
+					else if (whose_move == 'b' && distinctions[0].alphabetical == distinctions[2].alphabetical && en_passant_field[0] == distinctions[2].alphabetical && en_passant_field[1] == distinctions[2].numerical && memcmp(all_fields, "P p  p", 6) == 0)  // NOTE: even now some conditions are missing
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[1].alphabetical, distinctions[2].alphabetical, distinctions[2].numerical);
+					else if (whose_move == 'b' && distinctions[0].alphabetical != distinctions[2].alphabetical && en_passant_field[0] == distinctions[2].alphabetical && en_passant_field[1] == distinctions[2].numerical && memcmp(all_fields, "p P  p", 6) == 0)  // NOTE: even now some conditions are missing
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[0].alphabetical, distinctions[2].alphabetical, distinctions[2].numerical);
+					else
+						move_is_invalid = 1;
+				}
 				break;
 			case 4:  // castling
-				snprintf(store_move, STORE_MOVE_SIZE + 1, distinctions[0].alphabetical == 'a' ? "O-O-O" : "O-O");
+				if (parameters.validate != 1)
+					snprintf(store_move, STORE_MOVE_SIZE + 1, distinctions[0].alphabetical == 'a' ? "O-O-O" : "O-O");
+				else {
+					if (distinctions[0].alphabetical == 'a' && (  // NOTE: even now some conditions are missing
+						whose_move == 'w' && strchr(castling_prospects, 'Q') != '\0' && memcmp(&board_1[8 - 1][0], "R   K", 5) == 0 && memcmp(&board_2[8 - 1][0], "  KR ", 5) == 0
+						|| whose_move == 'b' && strchr(castling_prospects, 'q') != '\0' && memcmp(&board_1[8 - 8][0], "r   k", 5) == 0 && memcmp(&board_2[8 - 8][0], "  kr ", 5) == 0
+					))
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "O-O-O");
+					else if (distinctions[3].alphabetical == 'h' && (  // NOTE: even now some conditions are missing
+						whose_move == 'w' && strchr(castling_prospects, 'K') != '\0' && memcmp(&board_1[8 - 1][4], "K  R", 4) == 0 && memcmp(&board_2[8 - 1][0], " RK ", 4) == 0
+						|| whose_move == 'b' && strchr(castling_prospects, 'k') != '\0' && memcmp(&board_1[8 - 8][4], "k  r", 4) == 0 && memcmp(&board_2[8 - 8][0], " rk ", 4) == 0
+					))
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "O-O");
+					else
+						move_is_invalid = 1;
+				}
 				break;
 		}
+		if (move_is_invalid == 1) {
+			move_is_invalid = 0;
+			if (parameters.quiet != 1)
+				fprintf(stderr, "Skipped \"%s\" (%d%s FEN) because the calculated move is invalid.\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
+			continue;
+		}
+		if (first_move_number_already_written == 1)
+			strcpy(store_space, whose_move == 'w' && number_of_written_moves % 7 == 0 ? "\n" : " ");
+		if (whose_move == 'w' || first_move_number_already_written == 0)
+			snprintf(store_space + (first_move_number_already_written ? 1 : 0), STORE_SPACE_SIZE + 1 - (first_move_number_already_written ? 1 : 0), "%d. ", move_number);
 		fprintf(output, "%s%s", store_space, store_move);
 		if (find_piece(whose_move == 'w' ? 'k' : 'K', &king_placement, (const char (*)[8])board_2)) {
 			switch (is_king_checked(king_placement.piece_after, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2)) {
