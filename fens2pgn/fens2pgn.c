@@ -17,8 +17,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.2.5
- * date: 2015-05-30
+ * version 0.2.6
+ * date: 2015-05-31
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
 
@@ -28,10 +28,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.2.5
+#define VERSION 0.2.6
 
 /* to store the longest hypothetical piece placement field in FEN:
-   "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
+ * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
 #define MAX_PLACEMENT_LENGHT 70
 #define MAX_FEN_LENGHT 87  // after adding " b KQkq - 100 120"
 
@@ -64,12 +64,15 @@ struct structure_instruction {
 
 // lists directions in which a bishop can move
 struct structure_instruction instructions_bishop[4] = {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}};
-// lists directions in which a a king can move
+// lists directions in which a king can move
 struct structure_instruction instructions_king[8] = {{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
 // instructions how to "jump" to all fields reachable by a knight
 struct structure_instruction instructions_knight[8] = {{-2, 1}, {1, 1}, {2, 0}, {1, -1}, {0, -2}, {-1, -1}, {-2, 0}, {-1, 1}};
 // lists directions in which a rook can move
 struct structure_instruction instructions_rook[4] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+/* lists directions in which an attacking pawn can be found
+ * even numbered fields in array {0, 2} stands for white pawn */
+struct structure_instruction instructions_pawn[4] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
 
 struct structure_parameters {
 	bool validate;  // TODO: make use of this variable in array 'parameters' in function 'main'
@@ -85,6 +88,15 @@ struct structure_suffixes {
 	char rd[3];
 	char th[3];
 } suffixes = {"st", "nd", "rd", "th"};
+
+// Determines if field (x, y) is inside chess board.
+bool are_coords_valid(char x, signed char y)
+{
+	if (x >= 'a' && x <= 'h' && y >= 1 && y <= 8)
+		return 1;
+	return 0;
+}
+
 
 char capitalized(char letter)
 {
@@ -125,7 +137,7 @@ static inline void fen2board(char *fen, char (*board)[8])
 }
 
 /* Writes to structure of type 'structure_field' coordinates of the first found
-   piece of type 'piece'; useful in finding kings. */
+ * piece of type 'piece'; useful in finding kings. */
 bool find_piece(char piece, struct structure_field *field, const char (*board)[8])
 {
 	for (signed char y = 0; y < 8; ++y)
@@ -141,11 +153,11 @@ bool find_piece(char piece, struct structure_field *field, const char (*board)[8
 }
 
 /* Returns the first piece encountered by simultaneously incrementing coordinates
-   by values 'to_x' and 'to_y'. If no piece has been found, the function returns
-   space sign. Used to determine if king is under attack */
+ * by values 'to_x' and 'to_y'. If no piece has been found, the function returns
+ * space sign. Used to determine if king is under attack */
 char increment_and_return_encountered_piece(char x, signed char y, char to_x, signed char to_y, const char (*board)[8])
 {
-	for (x += to_x, y += to_y; x >= 'a' && x <= 'h' && y >= 1 && y <= 8; x += to_x, y += to_y)
+	for (x += to_x, y += to_y; are_coords_valid(x, y); x += to_x, y += to_y)
 		if (board[8 - y][x - 'a'] != ' ')
 			return board[8 - y][x - 'a'];
 	return ' ';
@@ -155,26 +167,38 @@ char increment_and_return_encountered_piece(char x, signed char y, char to_x, si
 signed char is_king_checked(char king, char x, signed char y, const char (*board)[8])
 {
 	const char Base = 'k' - king;
-	char encountered_piece;
-	signed char number_of_checks = 0;
-	for (signed char i = 0; i < 4; ++i) {  // is there any rook or queen attacking king?
+	char encountered_piece, tmp_x;
+	signed char number_of_checks = 0, tmp_y;
+	for (signed char i = 0; i < 4; ++i) {  // is there any ROOK or QUEEN attacking king?
 		encountered_piece = increment_and_return_encountered_piece(x, y, instructions_rook[i].to_x, instructions_rook[i].to_y, board);
 		if (encountered_piece == Base + 'R' || encountered_piece == Base + 'Q')
 			if (++number_of_checks >= 2)
 				return number_of_checks;
 	}
-	for (signed char i = 0; i < 4; ++i) {  // is there any bishop or queen attacking king?
+	for (signed char i = 0; i < 4; ++i) {  // is there any BISHOP or QUEEN attacking king?
 		encountered_piece = increment_and_return_encountered_piece(x, y, instructions_bishop[i].to_x, instructions_bishop[i].to_y, board);
 		if (encountered_piece == Base + 'B' || encountered_piece == Base + 'Q')
 			if (++number_of_checks >= 2)
 				return number_of_checks;
 	}
-	for (signed char i = 0; i < 8; ++i) {  // is there any knight attacking king?
+	for (signed char i = 0; i < 8; ++i) {  // is there any KING attacking king?
+		tmp_x = x + instructions_king[i].to_x;
+		tmp_y = y + instructions_king[i].to_y;
+		if (are_coords_valid(tmp_x, tmp_y) && board[8 - tmp_y][tmp_x - 'a'] == Base + 'K')
+			if (++number_of_checks >= 2)
+				return number_of_checks;
+	}
+	for (signed char i = (king == 'k' ? 0 : 1); i < 4; i += 2) {  // is there any PAWN attacking king?
+		tmp_x = x + instructions_pawn[i].to_x;
+		tmp_y = y + instructions_pawn[i].to_y;
+		if (are_coords_valid(tmp_x, tmp_y) && board[8 - tmp_y][tmp_x - 'a'] == Base + 'P')
+			if (++number_of_checks >= 2)
+				return number_of_checks;
+	}
+	for (signed char i = 0; i < 8; ++i) {  // is there any KNIGHT attacking king?
 		x += instructions_knight[i].to_x;
 		y += instructions_knight[i].to_y;
-		if (x < 'a' || x > 'h' || y < 1 || y > 8)  // we jumped out of the board
-			continue;
-		if (board[8 - y][x - 'a'] == Base + 'N')
+		if (are_coords_valid(x, y) && board[8 - y][x - 'a'] == Base + 'N')
 			if (++number_of_checks >= 2)
 				return number_of_checks;
 	}
@@ -191,6 +215,8 @@ bool does_king_cannot_move(const struct structure_field *field, char (*board)[8]
 	for (signed char i = 0, x, y; i < 8; ++i) {
 		x = A + instructions_king[i].to_x;
 		y = B + instructions_king[i].to_y;
+		if (are_coords_valid(x, y) == 0)  // we're out of the board
+			continue;
 		if (board[8 - y][x - 'a'] >= Base && board[8 - y][x - 'a'] <= Base + ('Z' - 'A'))  // king can't capture it's own piece
 			continue;
 		if (is_king_checked(field->piece_after, x, y, (const char (*)[8])board) != 0)  // this field is attacked
@@ -203,9 +229,9 @@ bool does_king_cannot_move(const struct structure_field *field, char (*board)[8]
 }
 
 /* This function exists for disambiguation purposes.
-   Piece 'piece' from coords (previous_x, previous_y) didn't move. Instead we'll
-   move the same type of piece from coords (new_x, new_y). The question is:
-   Does after this move our king will be save? */
+ * Piece 'piece' from coords (previous_x, previous_y) didn't move. Instead we'll
+ * move the same type of piece from coords (new_x, new_y). The question is:
+ * Does after this move our king will be save? */
 bool is_king_defended_after_move(char piece, char new_x, signed char new_y, char previous_x, signed char previous_y, const char (*board)[8])
 {
 	char king = (piece >= 'A' && piece <= 'Z' ? 'K' : 'k');  // white king can't be under attack after white's move
@@ -226,7 +252,7 @@ bool is_king_defended_after_move(char piece, char new_x, signed char new_y, char
 // Searches horizontally, vertically or diagonally for a competing piece from the field we just moved into.
 void increment_and_check(char piece, char x, signed char y, char previous_x, signed char previous_y, const char (*board)[8], bool *is_other, bool *in_line, bool *in_column, char to_x, signed char to_y)
 {
-	while (x >= 'a' && x <= 'h' && y >= 1 && y <= 8 && !(x == previous_x && y == previous_y)) {
+	while (are_coords_valid(x, y) && !(x == previous_x && y == previous_y)) {
 		if (board[8 - y][x - 'a'] == piece)  // we found the same type of piece in the same color
 			if (is_king_defended_after_move(piece, x, y, previous_x, previous_y, board)) {  // we must disambiguate our last move
 				if (x == previous_x)
@@ -242,9 +268,9 @@ void increment_and_check(char piece, char x, signed char y, char previous_x, sig
 }
 
 /* Function determines if in the 'board' there are pieces of type 'field->piece_after',
-   which can in one move go to the coordinates ('field->alphabetical', 'field->numerical')
-   and if their coordinates (previous_field->alphabetical, previous_field->numerical) collide with them.
-   Pawn is instead treated specially. */
+ * which can in one move go to the coordinates ('field->alphabetical', 'field->numerical')
+ * and if their coordinates (previous_field->alphabetical, previous_field->numerical) collide with them.
+ * Pawn is instead treated specially. */
 int find_competiting_piece(const char (*board)[8], const struct structure_field *field, const struct structure_field *previous_field)
 {
 	bool is_other = 0, in_line = 0, in_column = 0;
@@ -269,7 +295,7 @@ int find_competiting_piece(const char (*board)[8], const struct structure_field 
 			for (signed char x = A, y = B, i = 0; i < 8; ++i) {
 				x += instructions_knight[i].to_x;
 				y += instructions_knight[i].to_y;
-				if (x < 'a' || x > 'h' || y < 1 || y > 8 || x == Previous_A && y == Previous_B)
+				if (are_coords_valid(x, y) == 0 || x == Previous_A && y == Previous_B)
 					continue;
 				if (board[8 - y][x - 'a'] == piece)  // an competing knight is found
 					if (is_king_defended_after_move(piece, x, y, Previous_A, Previous_B, board)) {  // we must disambiguate our last move
@@ -424,7 +450,7 @@ int main(int argc, char *argv[])
 	struct structure_field distinctions[4], *field, *previous_field, king_placement;
 	signed char number_of_differences;
 	char control_character, whose_move = 'w';
-	char control_string[8 + 1], result[7 + 1];
+	char control_string[8 + 1], result[7 + 1];  // to store respectively "Result \"" and "1/2-1/2"
 	result[0] = '\0';
 	bool metadata_included = 0, fens_are_incomplete = 0, first_move_number_already_written = 0;
 	// beginning of METADATA section
