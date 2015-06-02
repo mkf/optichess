@@ -17,8 +17,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.3.0
- * date: 2015-05-31
+ * version 0.3.3
+ * date: 2015-06-02
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
 
@@ -29,7 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.3.0
+#define VERSION 0.3.3
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -99,7 +99,7 @@ bool are_coords_valid(char x, signed char y)
 	return 0;
 }
 
-// Function writes all (if not too many) differences between boards to array 'distinctions'.
+// Function writes up to 4 differences between boards to array 'distinctions'.
 static inline signed char compare_boards(const char (*board_1)[8], const char (*board_2)[8], struct structure_field distinctions[])
 {
 	signed char differences = 0;
@@ -117,17 +117,37 @@ static inline signed char compare_boards(const char (*board_1)[8], const char (*
 }
 
 // Reads FEN string and fill in the array representing chess board.
-static inline void fen2board(char *fen, char (*board)[8])
+static inline bool fen2board(char *fen, char (*board)[8], bool validate)
 {
 	memset(board, ' ', 8 * 8 * sizeof(char));
-	for (signed char y = 0; y < 8; ++y, ++fen)
-		for (signed char x = 0; x < 8; ++fen) {
-			if (*fen >= '1' && *fen <= '8')
-				x += *fen - '0';
-			else
-				board[y][x++] = *fen;
-		}
-	return;
+	if (validate != 1) {
+		for (signed char y = 0; y < 8; ++y, ++fen)
+			for (signed char x = 0; x < 8; ++fen) {
+				if (*fen >= '1' && *fen <= '8')
+					x += *fen - '0';
+				else
+					board[y][x++] = *fen;
+			}
+	} else {  // basic error checking (we support some chess variants)
+		signed char white_kings = 0, black_kings = 0;
+		for (signed char y = 0; y < 8; ++y, ++fen)
+			for (signed char x = 0; x < 8; ++fen) {
+				if (*fen >= '1' && *fen <= '8')
+					x += *fen - '0';
+				else if (toupper(*fen) == 'K') {
+					isupper(*fen) ? ++white_kings : ++black_kings;
+					board[y][x++] = *fen;
+				} else if (toupper(*fen) == 'P' && y != 0 && y != 7)
+					board[y][x++] = *fen;
+				else if (toupper(*fen) == 'R' || toupper(*fen) == 'N' || toupper(*fen) == 'B' || toupper(*fen) == 'Q')
+					board[y][x++] = *fen;
+				else
+					return 0;
+			}
+		if (white_kings != 1 || black_kings != 1)
+			return 0;
+	}
+	return 1;
 }
 
 /* Writes to structure of type 'structure_field' coordinates of the first found
@@ -261,31 +281,79 @@ void increment_and_check(char piece, char x, signed char y, char previous_x, sig
 	return;
 }
 
+// Determines if an queen can be moved from (x1, y1) to (x2, y2).
+bool is_path_straight_and_clear(char x1, signed char y1, char x2, signed char y2, const char (*board)[8])
+{
+	if (x1 != x2 && y1 != y2 && abs(x1 - x2) != abs(y1 - y2))
+		return 0;
+	signed char distance = (abs(x1 - x2) >= abs(y1 - y2) ? abs(x1 - x2) : abs(y1 - y2));
+	char x = x1, to_x = (x2 - x1) / distance;
+	signed char y = y1, to_y = (y2 - y1) / distance;
+	for (x += to_x, y += to_y; x != x2 && y != y2; x += to_x, y += to_y)
+		if (board[8 - y][x - 'a'] != ' ')
+			return 0;
+	return 1;
+}
+
+// Removes specified castling availability.
+void remove_castling(char type, char castling_prospects[])
+{
+	if (strchr(castling_prospects, type) != '\0') {
+		*strchr(castling_prospects, type) = '-';
+		if (strlen(castling_prospects) > 1)
+			for (char *pointer = strchr(castling_prospects, '-'); *pointer != '\0'; ++pointer)
+				*pointer = *(pointer + 1);
+	}
+	return;
+}
+
 /* Function determines if in the 'board' there are pieces of type 'field->piece_after',
  * which can in one move go to the coordinates ('field->alphabetical', 'field->numerical')
  * and if their coordinates (previous_field->alphabetical, previous_field->numerical) collide with them.
- * Pawn is instead treated specially. */  // TODO: make use of 'validate' parameter
-int find_competiting_piece(const char (*board)[8], const struct structure_field *field, const struct structure_field *previous_field, bool validate)
+ * Pawn is instead treated specially. */
+int find_competing_piece(const char (*board)[8], const struct structure_field *field, const struct structure_field *previous_field, char en_passant_field[], bool validate, char whose_move, char castling_prospects[])
 {
 	bool is_other = 0, in_line = 0, in_column = 0;
 	char piece = field->piece_after;
 	const char A = field->alphabetical, Previous_A = previous_field->alphabetical;
 	const signed char B = field->numerical, Previous_B = previous_field->numerical;
+	if (validate == 1 && (whose_move == 'w' && islower(piece) || whose_move == 'b' && isupper(piece)))  // we moved the opponent's piece
+		return F_Discard_FEN;
+	if (validate == 1 && (isupper(piece) && isupper(field->piece_before) || islower(piece) && islower(field->piece_before)))  // we captured our own piece
+		return F_Discard_FEN;
 	if (previous_field->piece_before != field->piece_after)  // pawn promotion
 		piece = '@';  // from this time '@' stands for a pawn promotion
 	switch (piece) {
 		case '@':
+			if (validate == 1 && (abs(A - Previous_A) > 1 || abs(B - Previous_B) != 1))
+				return F_Discard_FEN;
+			strcpy(en_passant_field, "-");
 			return (field->piece_before != ' ' ? F_Pawn_Capture_Promotion : F_Pawn_Promotion);
 		case 'p':
 		case 'P':
+			if (validate == 1) {
+				if (abs(A - Previous_A) == 1 && (abs(B - Previous_B) != 1 || !isalpha(previous_field->piece_before)))
+					return F_Discard_FEN;
+				if (abs(B - Previous_B) == 2) {
+					if (A - Previous_A != 0 || !(isupper(piece) && B == 4 && board[8 - 3][A - 'a'] == ' ' || islower(piece) && B == 5 && board[8 - 6][A - 'a'] == ' '))
+						return F_Discard_FEN;
+				} else if (abs(B - Previous_B) != 1)
+					return F_Discard_FEN;
+			}
+			if (abs(B - Previous_B) == 2)
+				sprintf(en_passant_field, "%c%hhd", A, (B + Previous_B) / 2);
 			return (field->piece_before != ' ' ? F_Pawn_Capture : F_Pawn_None);
 		case 'r':
 		case 'R':
+			if (validate == 1 && (is_path_straight_and_clear(Previous_A, Previous_B, A, B, board) != 1 || A != Previous_A && B != Previous_B))
+				return F_Discard_FEN;
 			for (signed char i = 0; i < 4; ++i)
 				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_rook[i].to_x, instructions_rook[i].to_y);
 			break;
 		case 'n':
 		case 'N':
+			if (validate == 1 && !(abs(A - Previous_A) == 2 && abs(B - Previous_B) == 1 || abs(A - Previous_A) == 1 && abs(B - Previous_B) == 2))
+				return F_Discard_FEN;
 			for (signed char x = A, y = B, i = 0; i < 8; ++i) {
 				x += instructions_knight[i].to_x;
 				y += instructions_knight[i].to_y;
@@ -303,11 +371,15 @@ int find_competiting_piece(const char (*board)[8], const struct structure_field 
 			break;
 		case 'b':
 		case 'B':
+			if (validate == 1 && (is_path_straight_and_clear(Previous_A, Previous_B, A, B, board) != 1 || A == Previous_A || B == Previous_B))
+				return F_Discard_FEN;
 			for (signed char i = 0; i < 4; ++i)
 				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_bishop[i].to_x, instructions_bishop[i].to_y);
 			break;
 		case 'q':
 		case 'Q':
+			if (validate == 1 && is_path_straight_and_clear(Previous_A, Previous_B, A, B, board) != 1)
+				return F_Discard_FEN;
 			for (signed char i = 0; i < 4; ++i)
 				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_rook[i].to_x, instructions_rook[i].to_y);
 			for (signed char i = 0; i < 4; ++i)
@@ -315,8 +387,15 @@ int find_competiting_piece(const char (*board)[8], const struct structure_field 
 			break;
 		case 'k':
 		case 'K':
+			if (validate == 1) {
+				if (abs(A - Previous_A) > 1 || abs(B - Previous_B) > 1)
+					return F_Discard_FEN;
+				remove_castling(piece == 'k' ? 'q' : 'Q' , castling_prospects);
+				remove_castling(piece == 'k' ? 'k' : 'K' , castling_prospects);
+			}
 			break;
 	}
+	strcpy(en_passant_field, "-");
 	if (in_column == 1 && in_line == 1)
 		return F_Both;
 	if (in_column == 1 && in_line == 0)
@@ -326,6 +405,14 @@ int find_competiting_piece(const char (*board)[8], const struct structure_field 
 	if (is_other == 1)
 		return F_Other;
 	return F_None;
+}
+
+// Determines if king is under attack while castling.
+signed char is_king_checked_while_castling(char king, char x, signed char y, const char (*board_1)[8], const char (*board_2)[8], signed char to_x)
+{
+	if (is_king_checked(king, x, y, board_1) || is_king_checked(king, x + to_x, y, board_2) || is_king_checked(king, x + 2 * to_x, y, board_2))
+		return 1;
+	return 0;
 }
 
 char *ordinal_number_suffix(int number)
@@ -440,7 +527,7 @@ int main(int argc, char *argv[])
 	char store_space[STORE_SPACE_SIZE + 1], store_move[STORE_MOVE_SIZE + 1];
 	char board_buffer_1[8][8], board_buffer_2[8][8];
 	char (*board_1)[8] = board_buffer_1, (*board_2)[8] = board_buffer_2;
-	int fen_number = 1, move_number = 1, number_of_written_moves = 0;
+	int fen_number = 0, move_number = 1, number_of_written_moves = 0;
 	struct structure_field distinctions[4], *field, *previous_field, king_placement;
 	signed char number_of_differences;
 	char control_character, whose_move = 'w', castling_prospects[4 + 1] = "KQkq", en_passant_field[2 + 1] = "-";
@@ -468,7 +555,7 @@ int main(int argc, char *argv[])
 	ungetc(control_character, input);
 	// beginning of GAME section
 	if (fscanf(input, "%" STR(MAX_FEN_LENGHT) "[-0-9a-h/rnqkpRNBQKP w]", fen_buffer) != 1) {  // reading the first FEN
-		fputs("No valid FEN found.", stderr);
+		fputs("No valid FEN found.\n", stderr);
 		return EILSEQ;
 	}
 	++fen_number;
@@ -488,13 +575,19 @@ int main(int argc, char *argv[])
 	}
 	if (metadata_included == 1)
 		putc('\n', output);
-	fen2board(fen_placement_buffer, board_1);
+	if (fen2board(fen_placement_buffer, board_1, parameters.validate) == 0) {
+		fputs("There are more than 2 kings or invalid pieces on the first board. Terminating.\n", stderr);
+		return 0;
+	}
 	for (;;) {
 		if (fscanf(input, " %" STR(MAX_FEN_LENGHT) "[-0-9a-h/rnqkpRNBQKP w]", fen_buffer) != 1)
 			break;
 		++fen_number;
 		sscanf(fen_buffer, "%" STR(MAX_PLACEMENT_LENGHT) "[1-8/rnbqkpRNBQKP]", fen_placement_buffer);
-		fen2board(fen_placement_buffer, board_2);
+		if (fen2board(fen_placement_buffer, board_2, parameters.validate) == 0) {
+			fprintf(stderr, "There are more than 2 kings or invalid pieces on board nr %d. Terminating.\n", fen_number);
+			return 0;
+		}
 		number_of_differences = compare_boards((const char (*)[8])board_1, (const char (*)[8])board_2, distinctions);
 		if (number_of_differences < 2) {
 			if (parameters.verbose == 1)
@@ -514,7 +607,7 @@ int main(int argc, char *argv[])
 					field = &distinctions[1];
 					previous_field = &distinctions[0];
 				}
-				switch (find_competiting_piece((const char (*)[8])board_2, (const struct structure_field *)field, (const struct structure_field *)previous_field, parameters.validate)) {
+				switch (find_competing_piece((const char (*)[8])board_2, (const struct structure_field *)field, (const struct structure_field *)previous_field, en_passant_field, parameters.validate, whose_move, castling_prospects)) {
 					case F_Pawn_None:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "%c%hhd", field->alphabetical, field->numerical);
 						break;
@@ -554,14 +647,16 @@ int main(int argc, char *argv[])
 				} else {
 					char all_fields[6 + 1];
 					snprintf(all_fields, 6 + 1, "%c%c%c%c%c%c", distinctions[0].piece_before, distinctions[0].piece_after, distinctions[1].piece_before, distinctions[1].piece_after, distinctions[2].piece_before, distinctions[2].piece_after);
-					if (whose_move == 'w' && distinctions[0].alphabetical == distinctions[2].alphabetical && en_passant_field[0] == distinctions[0].alphabetical && en_passant_field[1] == distinctions[0].numerical && memcmp(all_fields, " PP p ", 6) == 0)  // NOTE: even now some conditions are missing
-						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[1].alphabetical, distinctions[0].alphabetical, distinctions[0].numerical);
-					else if (whose_move == 'w' && distinctions[0].alphabetical != distinctions[2].alphabetical && en_passant_field[0] == distinctions[0].alphabetical && en_passant_field[1] == distinctions[0].numerical && memcmp(all_fields, " Pp P ", 6) == 0)  // NOTE: even now some conditions are missing
-						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[2].alphabetical, distinctions[0].alphabetical, distinctions[0].numerical);
-					else if (whose_move == 'b' && distinctions[0].alphabetical == distinctions[2].alphabetical && en_passant_field[0] == distinctions[2].alphabetical && en_passant_field[1] == distinctions[2].numerical && memcmp(all_fields, "P p  p", 6) == 0)  // NOTE: even now some conditions are missing
-						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[1].alphabetical, distinctions[2].alphabetical, distinctions[2].numerical);
-					else if (whose_move == 'b' && distinctions[0].alphabetical != distinctions[2].alphabetical && en_passant_field[0] == distinctions[2].alphabetical && en_passant_field[1] == distinctions[2].numerical && memcmp(all_fields, "p P  p", 6) == 0)  // NOTE: even now some conditions are missing
-						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[0].alphabetical, distinctions[2].alphabetical, distinctions[2].numerical);
+					if (whose_move == 'w' && en_passant_field[0] == distinctions[0].alphabetical && en_passant_field[1] == distinctions[0].numerical && distinctions[0].numerical == distinctions[2].numerical + 1 && distinctions[1].alphabetical == distinctions[2].alphabetical - 1 && (
+						distinctions[0].alphabetical == distinctions[2].alphabetical && memcmp(all_fields, " PP p ", 6) == 0
+						|| distinctions[0].alphabetical != distinctions[2].alphabetical && memcmp(all_fields, " Pp P ", 6) == 0
+					))
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[0].alphabetical == distinctions[2].alphabetical ? distinctions[1].alphabetical : distinctions[2].alphabetical, distinctions[0].alphabetical, distinctions[0].numerical);
+						else if (whose_move == 'b' && en_passant_field[0] == distinctions[2].alphabetical && en_passant_field[1] == distinctions[2].numerical && distinctions[0].numerical == distinctions[2].numerical + 1 && distinctions[0].alphabetical == distinctions[1].alphabetical - 1 && (
+						distinctions[0].alphabetical == distinctions[2].alphabetical && memcmp(all_fields, "P p  p", 6) == 0
+						|| distinctions[0].alphabetical != distinctions[2].alphabetical && memcmp(all_fields, "p P  p", 6) == 0
+					))
+						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[0].alphabetical == distinctions[2].alphabetical ? distinctions[1].alphabetical : distinctions[0].alphabetical, distinctions[2].alphabetical, distinctions[2].numerical);
 					else
 						move_is_invalid = 1;
 				}
@@ -570,12 +665,12 @@ int main(int argc, char *argv[])
 				if (parameters.validate != 1)
 					snprintf(store_move, STORE_MOVE_SIZE + 1, distinctions[0].alphabetical == 'a' ? "O-O-O" : "O-O");
 				else {
-					if (distinctions[0].alphabetical == 'a' && (  // NOTE: even now some conditions are missing
+					if (distinctions[0].alphabetical == 'a' && is_king_checked_while_castling(distinctions[3].piece_before, distinctions[3].alphabetical, distinctions[3].numerical, (const char (*)[8])board_1, (const char (*)[8])board_2, -1) == 0 && (
 						whose_move == 'w' && strchr(castling_prospects, 'Q') != '\0' && memcmp(&board_1[8 - 1][0], "R   K", 5) == 0 && memcmp(&board_2[8 - 1][0], "  KR ", 5) == 0
 						|| whose_move == 'b' && strchr(castling_prospects, 'q') != '\0' && memcmp(&board_1[8 - 8][0], "r   k", 5) == 0 && memcmp(&board_2[8 - 8][0], "  kr ", 5) == 0
 					))
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "O-O-O");
-					else if (distinctions[3].alphabetical == 'h' && (  // NOTE: even now some conditions are missing
+						else if (distinctions[3].alphabetical == 'h' && is_king_checked_while_castling(distinctions[0].piece_before, distinctions[0].alphabetical, distinctions[0].numerical, (const char (*)[8])board_1, (const char (*)[8])board_2, 1) == 0 && (
 						whose_move == 'w' && strchr(castling_prospects, 'K') != '\0' && memcmp(&board_1[8 - 1][4], "K  R", 4) == 0 && memcmp(&board_2[8 - 1][0], " RK ", 4) == 0
 						|| whose_move == 'b' && strchr(castling_prospects, 'k') != '\0' && memcmp(&board_1[8 - 8][4], "k  r", 4) == 0 && memcmp(&board_2[8 - 8][0], " rk ", 4) == 0
 					))
@@ -585,12 +680,18 @@ int main(int argc, char *argv[])
 				}
 				break;
 		}
-		if (move_is_invalid == 1) {
+		if (parameters.validate == 1 && move_is_invalid == 1) {
 			move_is_invalid = 0;
 			if (parameters.quiet != 1)
 				fprintf(stderr, "Skipped \"%s\" (%d%s FEN) because the calculated move is invalid.\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
 			continue;
 		}
+		if (parameters.validate == 1 && find_piece(whose_move == 'w' ? 'K' : 'k', &king_placement, (const char (*)[8])board_2))
+			if (is_king_checked(king_placement.piece_after, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2)) {
+				if (parameters.quiet != 1)
+					fprintf(stderr, "Skipped \"%s\" (%d%s FEN) because we're still in check.\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
+				continue;
+			}
 		if (first_move_number_already_written == 1)
 			strcpy(store_space, whose_move == 'w' && number_of_written_moves % 7 == 0 ? "\n" : " ");
 		if (whose_move == 'w' || first_move_number_already_written == 0)
