@@ -17,8 +17,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.3.3
- * date: 2015-06-02
+ * version 0.3.4
+ * date: 2015-06-03
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
 
@@ -29,7 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.3.3
+#define VERSION 0.3.4
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -42,14 +42,14 @@
 #define STR(x) STR_2(x)
 #define STR_2(x) # x
 
-enum find_competiting_piece_exit_codes {
-	F_None, F_In_Line, F_In_Column, F_Both, F_Other,
-	F_Pawn_None, F_Pawn_Capture, F_Pawn_Promotion, F_Pawn_Capture_Promotion,
-	F_Discard_FEN
-};
-
 enum read_parameters_exit_codes {
 	P_Do_Nothing, P_Error, P_Help, P_Usage, P_Version
+};
+
+enum what_to_write_exit_codes {
+	W_None, W_In_Line, W_In_Column, W_Both, W_Other,
+	W_Pawn_None, W_Pawn_Capture, W_Pawn_Promotion, W_Pawn_Capture_Promotion,
+	W_Discard_Fen
 };
 
 struct structure_field {
@@ -68,12 +68,13 @@ struct structure_instruction {
 struct structure_instruction instructions_bishop[4] = {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}};
 // lists directions in which a king can move
 struct structure_instruction instructions_king[8] = {{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
-// instructions how to "jump" to all fields reachable by a knight
-struct structure_instruction instructions_knight[8] = {{-2, 1}, {1, 1}, {2, 0}, {1, -1}, {0, -2}, {-1, -1}, {-2, 0}, {-1, 1}};
+// lists directions in which a knight can move
+struct structure_instruction instructions_knight[8] = {{2, 1}, {1, 2}, {-1, 2}, {-2, 1}, {-2, -1}, {-1, -2}, {1, -2}, {2, -1}};
 // lists directions in which a rook can move
 struct structure_instruction instructions_rook[4] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
 /* lists directions in which an attacking pawn can be found
- * even numbered fields in array {0, 2} stands for white pawn */
+ * even numbered fields {0, 2} in array stands for white pawn,
+ * whereas the odd ones {1, 3} stands for black pawn */
 struct structure_instruction instructions_pawn[4] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
 
 struct structure_parameters {
@@ -100,24 +101,24 @@ bool are_coords_valid(char x, signed char y)
 }
 
 // Function writes up to 4 differences between boards to array 'distinctions'.
-static inline signed char compare_boards(const char (*board_1)[8], const char (*board_2)[8], struct structure_field distinctions[])
+static inline signed char compare_boards(const char (*Board_1)[8], const char (*Board_2)[8], struct structure_field distinctions[])
 {
 	signed char differences = 0;
 	for (signed char y = 0; y < 8; ++y)
 		for (signed char x = 0; x < 8; ++x)
-			if (board_1[y][x] != board_2[y][x]) {  // two boards differ in that field
+			if (Board_1[y][x] != Board_2[y][x]) {  // two boards differ in that field
 				if (++differences > 4)  // checks if array 'distinctions' is too small to hold all differences
 					continue;
 				distinctions[differences - 1].alphabetical = 'a' + x;
 				distinctions[differences - 1].numerical = 8 - y;
-				distinctions[differences - 1].piece_before = board_1[y][x];
-				distinctions[differences - 1].piece_after = board_2[y][x];
+				distinctions[differences - 1].piece_before = Board_1[y][x];
+				distinctions[differences - 1].piece_after = Board_2[y][x];
 			}
 	return differences;
 }
 
 // Reads FEN string and fill in the array representing chess board.
-static inline bool fen2board(char *fen, char (*board)[8], bool validate)
+bool fen2board(char *fen, char (*board)[8], bool validate)
 {
 	memset(board, ' ', 8 * 8 * sizeof(char));
 	if (validate != 1) {
@@ -152,11 +153,11 @@ static inline bool fen2board(char *fen, char (*board)[8], bool validate)
 
 /* Writes to structure of type 'structure_field' coordinates of the first found
  * piece of type 'piece'; useful in finding kings. */
-bool find_piece(char piece, struct structure_field *field, const char (*board)[8])
+bool find_piece(char piece, struct structure_field *field, const char (*Board)[8])
 {
 	for (signed char y = 0; y < 8; ++y)
 		for (signed char x = 0; x < 8; ++x)
-			if (board[y][x] == piece) {
+			if (Board[y][x] == piece) {
 				field->alphabetical = 'a' + x;
 				field->numerical = 8 - y;
 				field->piece_after = piece;
@@ -169,50 +170,50 @@ bool find_piece(char piece, struct structure_field *field, const char (*board)[8
 /* Returns the first piece encountered by simultaneously incrementing coordinates
  * by values 'to_x' and 'to_y'. If no piece has been found, the function returns
  * space sign. Used to determine if king is under attack */
-char increment_and_return_encountered_piece(char x, signed char y, char to_x, signed char to_y, const char (*board)[8])
+char increment_and_return_encountered_piece(char x, signed char y, char to_x, signed char to_y, const char (*Board)[8])
 {
 	for (x += to_x, y += to_y; are_coords_valid(x, y); x += to_x, y += to_y)
-		if (board[8 - y][x - 'a'] != ' ')
-			return board[8 - y][x - 'a'];
+		if (Board[8 - y][x - 'a'] != ' ')
+			return Board[8 - y][x - 'a'];
 	return ' ';
 }
 
 // Determines if king is under attack.
-signed char is_king_checked(char king, char x, signed char y, const char (*board)[8])
+signed char is_king_checked(char king, const char A, const signed char B, const char (*Board)[8])
 {
 	const char Base = 'k' - king;
-	char encountered_piece, tmp_x;
-	signed char number_of_checks = 0, tmp_y;
+	char encountered_piece, x;
+	signed char number_of_checks = 0, y;
 	for (signed char i = 0; i < 4; ++i) {  // is there any ROOK or QUEEN attacking king?
-		encountered_piece = increment_and_return_encountered_piece(x, y, instructions_rook[i].to_x, instructions_rook[i].to_y, board);
+		encountered_piece = increment_and_return_encountered_piece(A, B, instructions_rook[i].to_x, instructions_rook[i].to_y, Board);
 		if (encountered_piece == Base + 'R' || encountered_piece == Base + 'Q')
 			if (++number_of_checks >= 2)
 				return number_of_checks;
 	}
 	for (signed char i = 0; i < 4; ++i) {  // is there any BISHOP or QUEEN attacking king?
-		encountered_piece = increment_and_return_encountered_piece(x, y, instructions_bishop[i].to_x, instructions_bishop[i].to_y, board);
+		encountered_piece = increment_and_return_encountered_piece(A, B, instructions_bishop[i].to_x, instructions_bishop[i].to_y, Board);
 		if (encountered_piece == Base + 'B' || encountered_piece == Base + 'Q')
 			if (++number_of_checks >= 2)
 				return number_of_checks;
 	}
 	for (signed char i = 0; i < 8; ++i) {  // is there any KING attacking king?
-		tmp_x = x + instructions_king[i].to_x;
-		tmp_y = y + instructions_king[i].to_y;
-		if (are_coords_valid(tmp_x, tmp_y) && board[8 - tmp_y][tmp_x - 'a'] == Base + 'K')
+		x = A + instructions_king[i].to_x;
+		y = B + instructions_king[i].to_y;
+		if (are_coords_valid(x, y) && Board[8 - y][x - 'a'] == Base + 'K')
 			if (++number_of_checks >= 2)
 				return number_of_checks;
 	}
-	for (signed char i = (king == 'k' ? 0 : 1); i < 4; i += 2) {  // is there any PAWN attacking king?
-		tmp_x = x + instructions_pawn[i].to_x;
-		tmp_y = y + instructions_pawn[i].to_y;
-		if (are_coords_valid(tmp_x, tmp_y) && board[8 - tmp_y][tmp_x - 'a'] == Base + 'P')
+	for (signed char i = (islower(king) ? 0 : 1); i < 4; i += 2) {  // is there any PAWN attacking king?
+		x = A + instructions_pawn[i].to_x;
+		y = B + instructions_pawn[i].to_y;
+		if (are_coords_valid(x, y) && Board[8 - y][x - 'a'] == Base + 'P')
 			if (++number_of_checks >= 2)
 				return number_of_checks;
 	}
 	for (signed char i = 0; i < 8; ++i) {  // is there any KNIGHT attacking king?
-		x += instructions_knight[i].to_x;
-		y += instructions_knight[i].to_y;
-		if (are_coords_valid(x, y) && board[8 - y][x - 'a'] == Base + 'N')
+		x = A + instructions_knight[i].to_x;
+		y = B + instructions_knight[i].to_y;
+		if (are_coords_valid(x, y) && Board[8 - y][x - 'a'] == Base + 'N')
 			if (++number_of_checks >= 2)
 				return number_of_checks;
 	}
@@ -220,11 +221,11 @@ signed char is_king_checked(char king, char x, signed char y, const char (*board
 }
 
 // Determines if king cannot move.
-bool does_king_cannot_move(const struct structure_field *field, char (*board)[8])
+bool does_king_cannot_move(const struct structure_field *Field, char (*board)[8])
 {
-	const char Base = field->piece_after - ('K' - 'A');
-	const char A = field->alphabetical;
-	const signed char B = field->numerical;
+	const char Base = Field->piece_after - ('K' - 'A');
+	const char A = Field->alphabetical;
+	const signed char B = Field->numerical;
 	board[8 - B][A - 'a'] = ' ';  // king is temporarily removed
 	for (signed char i = 0, x, y; i < 8; ++i) {
 		x = A + instructions_king[i].to_x;
@@ -233,12 +234,12 @@ bool does_king_cannot_move(const struct structure_field *field, char (*board)[8]
 			continue;
 		if (board[8 - y][x - 'a'] >= Base && board[8 - y][x - 'a'] <= Base + ('Z' - 'A'))  // king can't capture it's own piece
 			continue;
-		if (is_king_checked(field->piece_after, x, y, (const char (*)[8])board) != 0)  // this field is attacked
+		if (is_king_checked(Field->piece_after, x, y, (const char (*)[8])board) != 0)  // this field is attacked
 			continue;
-		board[8 - B][A - 'a'] = field->piece_after;  // king returns to it's field
+		board[8 - B][A - 'a'] = Field->piece_after;  // king returns to it's field
 		return 0;  // king can escape
 	}
-	board[8 - B][A - 'a'] = field->piece_after;  // king returns to it's field
+	board[8 - B][A - 'a'] = Field->piece_after;  // king returns to it's field
 	return 1;  // king can't escape
 }
 
@@ -246,11 +247,11 @@ bool does_king_cannot_move(const struct structure_field *field, char (*board)[8]
  * Piece 'piece' from coords (previous_x, previous_y) didn't move. Instead we'll
  * move the same type of piece from coords (new_x, new_y). The question is:
  * Does after this move our king will be save? */
-bool is_king_defended_after_move(char piece, char new_x, signed char new_y, char previous_x, signed char previous_y, const char (*board)[8])
+bool is_king_defended_after_move(char piece, char new_x, signed char new_y, char previous_x, signed char previous_y, const char (*Board)[8])
 {
 	char king = (piece >= 'A' && piece <= 'Z' ? 'K' : 'k');  // white king can't be under attack after white's move
 	char (*new_board)[8] = (char (*)[8])malloc(8 * 8 * sizeof(char));
-	memcpy(new_board, board, 8 * 8 * sizeof(char));
+	memcpy(new_board, Board, 8 * 8 * sizeof(char));
 	new_board[8 - previous_y][previous_x - 'a'] = piece;
 	new_board[8 - new_y][new_x - 'a'] = ' ';
 	struct structure_field king_placement;
@@ -264,11 +265,11 @@ bool is_king_defended_after_move(char piece, char new_x, signed char new_y, char
 }
 
 // Searches horizontally, vertically or diagonally for a competing piece from the field we just moved into.
-void increment_and_check(char piece, char x, signed char y, char previous_x, signed char previous_y, const char (*board)[8], bool *is_other, bool *in_line, bool *in_column, char to_x, signed char to_y)
+void increment_and_check(char piece, char x, signed char y, char previous_x, signed char previous_y, const char (*Board)[8], bool *is_other, bool *in_line, bool *in_column, char to_x, signed char to_y)
 {
 	while (are_coords_valid(x, y) && !(x == previous_x && y == previous_y)) {
-		if (board[8 - y][x - 'a'] == piece)  // we found the same type of piece in the same color
-			if (is_king_defended_after_move(piece, x, y, previous_x, previous_y, board)) {  // we must disambiguate our last move
+		if (Board[8 - y][x - 'a'] == piece)  // we found the same type of piece in the same color
+			if (is_king_defended_after_move(piece, x, y, previous_x, previous_y, Board)) {  // we must disambiguate our last move
 				if (x == previous_x)
 					*in_column = 1;
 				if (y == previous_y)
@@ -281,8 +282,16 @@ void increment_and_check(char piece, char x, signed char y, char previous_x, sig
 	return;
 }
 
-// Determines if an queen can be moved from (x1, y1) to (x2, y2).
-bool is_path_straight_and_clear(char x1, signed char y1, char x2, signed char y2, const char (*board)[8])
+// Determines if king is under attack while castling.
+signed char is_king_checked_while_castling(char king, char x, signed char y, const char (*Board_1)[8], const char (*Board_2)[8], signed char to_x)
+{
+	if (is_king_checked(king, x, y, Board_1) || is_king_checked(king, x + to_x, y, Board_2) || is_king_checked(king, x + 2 * to_x, y, Board_2))
+		return 1;
+	return 0;
+}
+
+// Determines if a queen can be moved from (x1, y1) to (x2, y2).
+bool is_path_straight_and_clear(char x1, signed char y1, char x2, signed char y2, const char (*Board)[8])
 {
 	if (x1 != x2 && y1 != y2 && abs(x1 - x2) != abs(y1 - y2))
 		return 0;
@@ -290,129 +299,9 @@ bool is_path_straight_and_clear(char x1, signed char y1, char x2, signed char y2
 	char x = x1, to_x = (x2 - x1) / distance;
 	signed char y = y1, to_y = (y2 - y1) / distance;
 	for (x += to_x, y += to_y; x != x2 && y != y2; x += to_x, y += to_y)
-		if (board[8 - y][x - 'a'] != ' ')
+		if (Board[8 - y][x - 'a'] != ' ')
 			return 0;
 	return 1;
-}
-
-// Removes specified castling availability.
-void remove_castling(char type, char castling_prospects[])
-{
-	if (strchr(castling_prospects, type) != '\0') {
-		*strchr(castling_prospects, type) = '-';
-		if (strlen(castling_prospects) > 1)
-			for (char *pointer = strchr(castling_prospects, '-'); *pointer != '\0'; ++pointer)
-				*pointer = *(pointer + 1);
-	}
-	return;
-}
-
-/* Function determines if in the 'board' there are pieces of type 'field->piece_after',
- * which can in one move go to the coordinates ('field->alphabetical', 'field->numerical')
- * and if their coordinates (previous_field->alphabetical, previous_field->numerical) collide with them.
- * Pawn is instead treated specially. */
-int find_competing_piece(const char (*board)[8], const struct structure_field *field, const struct structure_field *previous_field, char en_passant_field[], bool validate, char whose_move, char castling_prospects[])
-{
-	bool is_other = 0, in_line = 0, in_column = 0;
-	char piece = field->piece_after;
-	const char A = field->alphabetical, Previous_A = previous_field->alphabetical;
-	const signed char B = field->numerical, Previous_B = previous_field->numerical;
-	if (validate == 1 && (whose_move == 'w' && islower(piece) || whose_move == 'b' && isupper(piece)))  // we moved the opponent's piece
-		return F_Discard_FEN;
-	if (validate == 1 && (isupper(piece) && isupper(field->piece_before) || islower(piece) && islower(field->piece_before)))  // we captured our own piece
-		return F_Discard_FEN;
-	if (previous_field->piece_before != field->piece_after)  // pawn promotion
-		piece = '@';  // from this time '@' stands for a pawn promotion
-	switch (piece) {
-		case '@':
-			if (validate == 1 && (abs(A - Previous_A) > 1 || abs(B - Previous_B) != 1))
-				return F_Discard_FEN;
-			strcpy(en_passant_field, "-");
-			return (field->piece_before != ' ' ? F_Pawn_Capture_Promotion : F_Pawn_Promotion);
-		case 'p':
-		case 'P':
-			if (validate == 1) {
-				if (abs(A - Previous_A) == 1 && (abs(B - Previous_B) != 1 || !isalpha(previous_field->piece_before)))
-					return F_Discard_FEN;
-				if (abs(B - Previous_B) == 2) {
-					if (A - Previous_A != 0 || !(isupper(piece) && B == 4 && board[8 - 3][A - 'a'] == ' ' || islower(piece) && B == 5 && board[8 - 6][A - 'a'] == ' '))
-						return F_Discard_FEN;
-				} else if (abs(B - Previous_B) != 1)
-					return F_Discard_FEN;
-			}
-			if (abs(B - Previous_B) == 2)
-				sprintf(en_passant_field, "%c%hhd", A, (B + Previous_B) / 2);
-			return (field->piece_before != ' ' ? F_Pawn_Capture : F_Pawn_None);
-		case 'r':
-		case 'R':
-			if (validate == 1 && (is_path_straight_and_clear(Previous_A, Previous_B, A, B, board) != 1 || A != Previous_A && B != Previous_B))
-				return F_Discard_FEN;
-			for (signed char i = 0; i < 4; ++i)
-				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_rook[i].to_x, instructions_rook[i].to_y);
-			break;
-		case 'n':
-		case 'N':
-			if (validate == 1 && !(abs(A - Previous_A) == 2 && abs(B - Previous_B) == 1 || abs(A - Previous_A) == 1 && abs(B - Previous_B) == 2))
-				return F_Discard_FEN;
-			for (signed char x = A, y = B, i = 0; i < 8; ++i) {
-				x += instructions_knight[i].to_x;
-				y += instructions_knight[i].to_y;
-				if (are_coords_valid(x, y) == 0 || x == Previous_A && y == Previous_B)
-					continue;
-				if (board[8 - y][x - 'a'] == piece)  // an competing knight is found
-					if (is_king_defended_after_move(piece, x, y, Previous_A, Previous_B, board)) {  // we must disambiguate our last move
-						if (x == Previous_A)
-							in_column = 1;
-						if (y == Previous_B)
-							in_line = 1;
-						is_other = 1;
-					}
-			}
-			break;
-		case 'b':
-		case 'B':
-			if (validate == 1 && (is_path_straight_and_clear(Previous_A, Previous_B, A, B, board) != 1 || A == Previous_A || B == Previous_B))
-				return F_Discard_FEN;
-			for (signed char i = 0; i < 4; ++i)
-				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_bishop[i].to_x, instructions_bishop[i].to_y);
-			break;
-		case 'q':
-		case 'Q':
-			if (validate == 1 && is_path_straight_and_clear(Previous_A, Previous_B, A, B, board) != 1)
-				return F_Discard_FEN;
-			for (signed char i = 0; i < 4; ++i)
-				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_rook[i].to_x, instructions_rook[i].to_y);
-			for (signed char i = 0; i < 4; ++i)
-				increment_and_check(piece, A, B, Previous_A, Previous_B, board, &is_other, &in_line, &in_column, instructions_bishop[i].to_x, instructions_bishop[i].to_y);
-			break;
-		case 'k':
-		case 'K':
-			if (validate == 1) {
-				if (abs(A - Previous_A) > 1 || abs(B - Previous_B) > 1)
-					return F_Discard_FEN;
-				remove_castling(piece == 'k' ? 'q' : 'Q' , castling_prospects);
-				remove_castling(piece == 'k' ? 'k' : 'K' , castling_prospects);
-			}
-			break;
-	}
-	strcpy(en_passant_field, "-");
-	if (in_column == 1 && in_line == 1)
-		return F_Both;
-	if (in_column == 1 && in_line == 0)
-		return F_In_Column;
-	if (in_column == 0 && in_line == 1)
-		return F_In_Line;
-	if (is_other == 1)
-		return F_Other;
-	return F_None;
-}
-
-// Determines if king is under attack while castling.
-signed char is_king_checked_while_castling(char king, char x, signed char y, const char (*board_1)[8], const char (*board_2)[8], signed char to_x)
-{
-	if (is_king_checked(king, x, y, board_1) || is_king_checked(king, x + to_x, y, board_2) || is_king_checked(king, x + 2 * to_x, y, board_2))
-		return 1;
-	return 0;
 }
 
 char *ordinal_number_suffix(int number)
@@ -426,6 +315,18 @@ char *ordinal_number_suffix(int number)
 	if (number % 10 == 3)
 		return suffixes.rd;
 	return suffixes.th;
+}
+
+// Removes specified castling availability.
+void remove_castling(char type, char castling_prospects[])
+{
+	if (strchr(castling_prospects, type) != '\0') {
+		*strchr(castling_prospects, type) = '-';
+		if (strlen(castling_prospects) > 1)
+			for (char *pointer = strchr(castling_prospects, '-'); *pointer != '\0'; ++pointer)
+				*pointer = *(pointer + 1);
+	}
+	return;
 }
 
 static inline int read_parameters(int argc, char *argv[], struct structure_parameters *parameters)
@@ -483,6 +384,113 @@ static inline void swap_pointers(void **pointer_1, void **pointer_2)
 	*pointer_1 = *pointer_2;
 	*pointer_2 = store;
 	return;
+}
+
+/* Function determines one of the following types of move:
+ * W_None - standard move
+ * W_In_Line - we must disambiguate moving piece in line
+ * W_In_Column - we must disambiguate moving piece in column
+ * W_Both - we must disambiguate moving piece BOTH in column AND in line
+ * W_Other - we must disambiguate moving piece EITHER in column OR in line
+ * W_Pawn_None - standard pawn move
+ * W_Pawn_Capture - pawn capture
+ * W_Pawn_Promotion - pawn promotion
+ * W_Pawn_Capture_Promotion - pawn capture with promotion
+ * W_Discard_Fen - invalid move */
+int what_to_write(const char (*Board)[8], const struct structure_field *Field, const struct structure_field *Previous_Field, char en_passant_field[], bool validate, char whose_move, char castling_prospects[])
+{
+	bool is_other = 0, in_line = 0, in_column = 0;
+	char piece = Field->piece_after;
+	const char A = Field->alphabetical, Previous_A = Previous_Field->alphabetical;
+	const signed char B = Field->numerical, Previous_B = Previous_Field->numerical;
+	if (validate == 1 && (whose_move == 'w' && islower(piece) || whose_move == 'b' && isupper(piece)))  // we moved the opponent's piece
+		return W_Discard_Fen;
+	if (validate == 1 && (isupper(piece) && isupper(Field->piece_before) || islower(piece) && islower(Field->piece_before)))  // we captured our own piece
+		return W_Discard_Fen;
+	if (Previous_Field->piece_before != Field->piece_after)  // pawn promotion
+		piece = '@';  // from this time '@' stands for a pawn promotion
+	switch (piece) {
+		case '@':
+			if (validate == 1 && (abs(A - Previous_A) > 1 || abs(B - Previous_B) != 1))
+				return W_Discard_Fen;
+			strcpy(en_passant_field, "-");
+			return (Field->piece_before != ' ' ? W_Pawn_Capture_Promotion : W_Pawn_Promotion);
+		case 'p':
+		case 'P':
+			if (validate == 1) {
+				if (abs(A - Previous_A) == 1 && (abs(B - Previous_B) != 1 || !isalpha(Previous_Field->piece_before)))
+					return W_Discard_Fen;
+				if (abs(B - Previous_B) == 2) {
+					if (A - Previous_A != 0 || !(isupper(piece) && B == 4 && Board[8 - 3][A - 'a'] == ' ' || islower(piece) && B == 5 && Board[8 - 6][A - 'a'] == ' '))
+						return W_Discard_Fen;
+				} else if (abs(B - Previous_B) != 1)
+					return W_Discard_Fen;
+			}
+			if (abs(B - Previous_B) == 2)
+				sprintf(en_passant_field, "%c%hhd", A, (B + Previous_B) / 2);
+			return (Field->piece_before != ' ' ? W_Pawn_Capture : W_Pawn_None);
+		case 'r':
+		case 'R':
+			if (validate == 1 && (is_path_straight_and_clear(Previous_A, Previous_B, A, B, Board) != 1 || A != Previous_A && B != Previous_B))
+				return W_Discard_Fen;
+			for (signed char i = 0; i < 4; ++i)
+				increment_and_check(piece, A, B, Previous_A, Previous_B, Board, &is_other, &in_line, &in_column, instructions_rook[i].to_x, instructions_rook[i].to_y);
+			break;
+		case 'n':
+		case 'N':
+			if (validate == 1 && !(abs(A - Previous_A) == 2 && abs(B - Previous_B) == 1 || abs(A - Previous_A) == 1 && abs(B - Previous_B) == 2))
+				return W_Discard_Fen;
+			for (signed char x = A, y = B, i = 0; i < 8; ++i) {
+				x = A + instructions_knight[i].to_x;
+				y = B + instructions_knight[i].to_y;
+				if (are_coords_valid(x, y) == 0 || x == Previous_A && y == Previous_B)
+					continue;
+				if (Board[8 - y][x - 'a'] == piece)  // an competing knight is found
+					if (is_king_defended_after_move(piece, x, y, Previous_A, Previous_B, Board)) {  // we must disambiguate our last move
+						if (x == Previous_A)
+							in_column = 1;
+						if (y == Previous_B)
+							in_line = 1;
+						is_other = 1;
+					}
+			}
+			break;
+		case 'b':
+		case 'B':
+			if (validate == 1 && (is_path_straight_and_clear(Previous_A, Previous_B, A, B, Board) != 1 || A == Previous_A || B == Previous_B))
+				return W_Discard_Fen;
+			for (signed char i = 0; i < 4; ++i)
+				increment_and_check(piece, A, B, Previous_A, Previous_B, Board, &is_other, &in_line, &in_column, instructions_bishop[i].to_x, instructions_bishop[i].to_y);
+			break;
+		case 'q':
+		case 'Q':
+			if (validate == 1 && is_path_straight_and_clear(Previous_A, Previous_B, A, B, Board) != 1)
+				return W_Discard_Fen;
+			for (signed char i = 0; i < 4; ++i)
+				increment_and_check(piece, A, B, Previous_A, Previous_B, Board, &is_other, &in_line, &in_column, instructions_rook[i].to_x, instructions_rook[i].to_y);
+			for (signed char i = 0; i < 4; ++i)
+				increment_and_check(piece, A, B, Previous_A, Previous_B, Board, &is_other, &in_line, &in_column, instructions_bishop[i].to_x, instructions_bishop[i].to_y);
+			break;
+		case 'k':
+		case 'K':
+			if (validate == 1) {
+				if (abs(A - Previous_A) > 1 || abs(B - Previous_B) > 1)
+					return W_Discard_Fen;
+				remove_castling(piece == 'k' ? 'q' : 'Q' , castling_prospects);
+				remove_castling(piece == 'k' ? 'k' : 'K' , castling_prospects);
+			}
+			break;
+	}
+	strcpy(en_passant_field, "-");
+	if (in_column == 1 && in_line == 1)
+		return W_Both;
+	if (in_column == 1 && in_line == 0)
+		return W_In_Column;
+	if (in_column == 0 && in_line == 1)
+		return W_In_Line;
+	if (is_other == 1)
+		return W_Other;
+	return W_None;
 }
 
 int main(int argc, char *argv[])
@@ -607,33 +615,33 @@ int main(int argc, char *argv[])
 					field = &distinctions[1];
 					previous_field = &distinctions[0];
 				}
-				switch (find_competing_piece((const char (*)[8])board_2, (const struct structure_field *)field, (const struct structure_field *)previous_field, en_passant_field, parameters.validate, whose_move, castling_prospects)) {
-					case F_Pawn_None:
+				switch (what_to_write((const char (*)[8])board_2, (const struct structure_field *)field, (const struct structure_field *)previous_field, en_passant_field, parameters.validate, whose_move, castling_prospects)) {
+					case W_Pawn_None:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "%c%hhd", field->alphabetical, field->numerical);
 						break;
-					case F_Pawn_Capture:
+					case W_Pawn_Capture:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", previous_field->alphabetical, field->alphabetical, field->numerical);
 						break;
-					case F_Pawn_Promotion:
+					case W_Pawn_Promotion:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "%c%hhd=%c", field->alphabetical, field->numerical, toupper(field->piece_after));
 						break;
-					case F_Pawn_Capture_Promotion:
+					case W_Pawn_Capture_Promotion:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd=%c", previous_field->alphabetical, field->alphabetical, field->numerical, toupper(field->piece_after));
 						break;
-					case F_None:
+					case W_None:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%cx%c%hhd" : "%c%c%hhd", toupper(field->piece_after), field->alphabetical, field->numerical);
 						break;
-					case F_In_Line:
-					case F_Other:
+					case W_In_Line:
+					case W_Other:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%c%cx%c%hhd" : "%c%c%c%hhd", toupper(field->piece_after), previous_field->alphabetical, field->alphabetical, field->numerical);
 						break;
-					case F_In_Column:
+					case W_In_Column:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%c%hhdx%c%hhd" : "%c%hhd%c%hhd", toupper(field->piece_after), previous_field->numerical, field->alphabetical, field->numerical);
 						break;
-					case F_Both:
+					case W_Both:
 						snprintf(store_move, STORE_MOVE_SIZE + 1, field->piece_before != ' ' ? "%c%c%hhdx%c%hhd" : "%c%c%hhd%c%hhd", toupper(field->piece_after), previous_field->alphabetical, previous_field->numerical, field->alphabetical, field->numerical);
 						break;
-					case F_Discard_FEN:
+					case W_Discard_Fen:
 						move_is_invalid = 1;
 						break;
 					}
