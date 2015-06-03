@@ -17,7 +17,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.3.4
+ * version 0.4.0
  * date: 2015-06-03
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
@@ -28,8 +28,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "checkmate.h"
 
-#define VERSION 0.3.4
+#define VERSION 0.4.0
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -283,7 +284,7 @@ void increment_and_check(char piece, char x, signed char y, char previous_x, sig
 }
 
 // Determines if king is under attack while castling.
-signed char is_king_checked_while_castling(char king, char x, signed char y, const char (*Board_1)[8], const char (*Board_2)[8], signed char to_x)
+bool is_king_checked_while_castling(char king, char x, signed char y, const char (*Board_1)[8], const char (*Board_2)[8], signed char to_x)
 {
 	if (is_king_checked(king, x, y, Board_1) || is_king_checked(king, x + to_x, y, Board_2) || is_king_checked(king, x + 2 * to_x, y, Board_2))
 		return 1;
@@ -708,13 +709,16 @@ int main(int argc, char *argv[])
 		if (find_piece(whose_move == 'w' ? 'k' : 'K', &king_placement, (const char (*)[8])board_2)) {
 			switch (is_king_checked(king_placement.piece_after, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2)) {
 				case 2:
-					if (does_king_cannot_move((const struct structure_field *)&king_placement, board_2) == 1)
+					if (does_king_cannot_move((const struct structure_field *)&king_placement, board_2))
 						putc('#', output);
 					else
 						fputs("++", output);
 					break;
-				case 1:  // TODO: check for a checkmate
-					putc('+', output);
+				case 1:
+					if (is_it_checkmate(king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2))
+						putc('#', output);
+					else
+						putc('+', output);
 				default:
 					break;
 			}
