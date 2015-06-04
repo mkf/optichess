@@ -17,7 +17,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.4.3
+ * version 0.4.4
  * date: 2015-06-04
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
@@ -29,7 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.4.3
+#define VERSION 0.4.4
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -359,7 +359,7 @@ bool is_king_defended_after_move(char piece, char new_x, signed char new_y, char
 // Searches horizontally, vertically or diagonally for a competing piece from the field we just moved into.
 void increment_and_check(char piece, char x, signed char y, char previous_x, signed char previous_y, const char (*Board)[8], bool *is_other, bool *in_line, bool *in_column, char to_x, signed char to_y)
 {
-	while (are_coords_valid(x, y) && !(x == previous_x && y == previous_y)) {
+	for (x += to_x, y += to_y; are_coords_valid(x, y) && !(x == previous_x && y == previous_y); x += to_x, y += to_y)
 		if (Board[8 - y][x - 'a'] == piece)  // we found the same type of piece in the same color
 			if (is_king_defended_after_move(piece, x, y, previous_x, previous_y, Board)) {  // we must disambiguate our last move
 				if (x == previous_x)
@@ -368,9 +368,6 @@ void increment_and_check(char piece, char x, signed char y, char previous_x, sig
 					*in_line = 1;
 				*is_other = 1;
 			}
-		x += to_x;
-		y += to_y;
-	}
 	return;
 }
 
@@ -740,13 +737,13 @@ int main(int argc, char *argv[])
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[0].alphabetical == distinctions[2].alphabetical ? distinctions[1].alphabetical : distinctions[0].alphabetical, distinctions[2].alphabetical, distinctions[2].numerical);
 				} else {
 					char all_fields[6 + 1];
-					snprintf(all_fields, 6 + 1, "%c%c%c%c%c%c", distinctions[0].piece_before, distinctions[0].piece_after, distinctions[1].piece_before, distinctions[1].piece_after, distinctions[2].piece_before, distinctions[2].piece_after);
-					if (whose_move == 'w' && en_passant_field[0] == distinctions[0].alphabetical && en_passant_field[1] == distinctions[0].numerical && distinctions[0].numerical == distinctions[2].numerical + 1 && distinctions[1].alphabetical == distinctions[2].alphabetical - 1 && (
+					snprintf(all_fields, sizeof all_fields, "%c%c%c%c%c%c", distinctions[0].piece_before, distinctions[0].piece_after, distinctions[1].piece_before, distinctions[1].piece_after, distinctions[2].piece_before, distinctions[2].piece_after);
+					if (whose_move == 'w' && en_passant_field[0] == distinctions[0].alphabetical && en_passant_field[1] - '0' == distinctions[0].numerical && distinctions[0].numerical == distinctions[2].numerical + 1 && distinctions[1].alphabetical == distinctions[2].alphabetical - 1 && (
 						distinctions[0].alphabetical == distinctions[2].alphabetical && memcmp(all_fields, " PP p ", 6) == 0
 						|| distinctions[0].alphabetical != distinctions[2].alphabetical && memcmp(all_fields, " Pp P ", 6) == 0
 					))
 						snprintf(store_move, STORE_MOVE_SIZE + 1, "%cx%c%hhd", distinctions[0].alphabetical == distinctions[2].alphabetical ? distinctions[1].alphabetical : distinctions[2].alphabetical, distinctions[0].alphabetical, distinctions[0].numerical);
-					else if (whose_move == 'b' && en_passant_field[0] == distinctions[2].alphabetical && en_passant_field[1] == distinctions[2].numerical && distinctions[0].numerical == distinctions[2].numerical + 1 && distinctions[0].alphabetical == distinctions[1].alphabetical - 1 && (
+					else if (whose_move == 'b' && en_passant_field[0] == distinctions[2].alphabetical && en_passant_field[1] - '0' == distinctions[2].numerical && distinctions[0].numerical == distinctions[2].numerical + 1 && distinctions[0].alphabetical == distinctions[1].alphabetical - 1 && (
 						distinctions[0].alphabetical == distinctions[2].alphabetical && memcmp(all_fields, "P p  p", 6) == 0
 						|| distinctions[0].alphabetical != distinctions[2].alphabetical && memcmp(all_fields, "p P  p", 6) == 0
 					))
