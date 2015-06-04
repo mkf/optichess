@@ -17,7 +17,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.4.2
+ * version 0.4.3
  * date: 2015-06-04
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
@@ -29,7 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.4.2
+#define VERSION 0.4.3
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -196,18 +196,16 @@ bool is_piece_attacked(char piece, const char A, const signed char B, const char
 	signed char y, number_of_attacks = 0;
 	if (which_attack < 0) {  // NOTE: it means that we don't want to attack field (A, B), but cover it
 		which_attack = abs(which_attack);
-		if (islower(piece) && (
-			are_coords_valid(A, B - 1) && Board[8 - (B - 1)][A - 'a'] == 'P'
-			|| B - 2 == 2 && Board[8 - (B - 1)][A - 'a'] == ' ' && Board[8 - (B - 2)][A - 'a'] == 'P'
-		))
+		x = A;
+		if (islower(piece) && (are_coords_valid(A, B - 1) && Board[8 - (B - 1)][A - 'a'] == 'P' || B - 2 == 2 && Board[8 - (B - 1)][A - 'a'] == ' ' && Board[8 - (B - 2)][A - 'a'] == 'P')) {
+			y = B + (Board[8 - (B - 1)][A - 'a'] == 'P' ? -1 : -2);
 			if (++number_of_attacks == which_attack)
 				goto attacker_has_been_found;
-		else if (isupper(piece) && (
-			are_coords_valid(A, B + 1) && Board[8 - (B + 1)][A - 'a'] == 'p'
-			|| B + 2 == 7 && Board[8 - (B + 1)][A - 'a'] == ' ' && Board[8 - (B + 2)][A - 'a'] == 'p'
-		))
+		} else if (isupper(piece) && (are_coords_valid(A, B + 1) && Board[8 - (B + 1)][A - 'a'] == 'p' || B + 2 == 7 && Board[8 - (B + 1)][A - 'a'] == ' ' && Board[8 - (B + 2)][A - 'a'] == 'p')) {
+			y = B + (Board[8 - (B + 1)][A - 'a'] == 'p' ? 1 : 2);
 			if (++number_of_attacks == which_attack)
 				goto attacker_has_been_found;
+		}
 	} else
 		for (signed char i = (islower(piece) ? 0 : 1); i < 4; i += 2) {  // is there any PAWN attacking piece?
 			x = A + instructions_pawn[i].to_x;
