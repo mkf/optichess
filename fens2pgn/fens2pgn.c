@@ -17,7 +17,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * version 0.4.4
  * date: 2015-06-04
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
