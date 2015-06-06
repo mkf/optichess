@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.4.5
+#define VERSION 0.4.6
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -66,7 +66,7 @@ struct structure_instruction {
 struct structure_piece {
 	char alphabetical;
 	signed char numerical;
-	char piece;
+	char type;
 } store_piece;
 
 // lists directions in which a bishop can move
@@ -156,17 +156,16 @@ bool fen2board(char *fen, char (*board)[8], bool validate)
 	return 1;
 }
 
-/* Writes to structure of type 'structure_field' coordinates of the first found
+/* Writes to structure of type 'structure_piece' coordinates of the first found
  * piece of type 'piece'; useful in finding kings. */
-bool find_piece(char piece, struct structure_field *field, const char (*Board)[8])
+bool find_piece(const char type_of_piece, struct structure_piece *piece, const char (*Board)[8])
 {
 	for (signed char y = 0; y < 8; ++y)
 		for (signed char x = 0; x < 8; ++x)
-			if (Board[y][x] == piece) {
-				field->alphabetical = 'a' + x;
-				field->numerical = 8 - y;
-				field->piece_after = piece;
-				field->piece_before = '?';
+			if (Board[y][x] == type_of_piece) {
+				piece->alphabetical = 'a' + x;
+				piece->numerical = 8 - y;
+				piece->type = type_of_piece;
 				return 1;
 			}
 	return 0;
@@ -181,32 +180,32 @@ char increment_and_return_encountered_piece(char x, signed char y, char to_x, si
 		if (Board[8 - y][x - 'a'] != ' ') {
 			store_piece.alphabetical = x;
 			store_piece.numerical = y;
-			store_piece.piece = Board[8 - y][x + 'a'];
+			store_piece.type = Board[8 - y][x - 'a'];
 			return Board[8 - y][x - 'a'];
 		}
 	return ' ';
 }
 
 // Determines if piece is under attack.
-bool is_piece_attacked(char piece, const char A, const signed char B, const char (*Board)[8], signed char which_attack)
+bool is_piece_attacked(const char Piece, const char A, const signed char B, const char (*Board)[8], signed char which_attack)
 {
-	const char Base = (islower(piece) ? '\0' : 'a' - 'A');
+	const char Base = (islower(Piece) ? '\0' : 'a' - 'A');
 	char x, encountered_piece;
 	signed char y, number_of_attacks = 0;
 	if (which_attack < 0) {  // NOTE: it means that we don't want to attack field (A, B), but cover it
 		which_attack = abs(which_attack);
 		x = A;
-		if (islower(piece) && (are_coords_valid(A, B - 1) && Board[8 - (B - 1)][A - 'a'] == 'P' || B - 2 == 2 && Board[8 - (B - 1)][A - 'a'] == ' ' && Board[8 - (B - 2)][A - 'a'] == 'P')) {
+		if (islower(Piece) && (are_coords_valid(A, B - 1) && Board[8 - (B - 1)][A - 'a'] == 'P' || B - 2 == 2 && Board[8 - (B - 1)][A - 'a'] == ' ' && Board[8 - (B - 2)][A - 'a'] == 'P')) {
 			y = B + (Board[8 - (B - 1)][A - 'a'] == 'P' ? -1 : -2);
 			if (++number_of_attacks == which_attack)
 				goto attacker_has_been_found;
-		} else if (isupper(piece) && (are_coords_valid(A, B + 1) && Board[8 - (B + 1)][A - 'a'] == 'p' || B + 2 == 7 && Board[8 - (B + 1)][A - 'a'] == ' ' && Board[8 - (B + 2)][A - 'a'] == 'p')) {
+		} else if (isupper(Piece) && (are_coords_valid(A, B + 1) && Board[8 - (B + 1)][A - 'a'] == 'p' || B + 2 == 7 && Board[8 - (B + 1)][A - 'a'] == ' ' && Board[8 - (B + 2)][A - 'a'] == 'p')) {
 			y = B + (Board[8 - (B + 1)][A - 'a'] == 'p' ? 1 : 2);
 			if (++number_of_attacks == which_attack)
 				goto attacker_has_been_found;
 		}
 	} else
-		for (signed char i = (islower(piece) ? 0 : 1); i < 4; i += 2) {  // is there any PAWN attacking piece?
+		for (signed char i = (islower(Piece) ? 0 : 1); i < 4; i += 2) {  // is there any PAWN attacking piece?
 			x = A + instructions_pawn[i].to_x;
 			y = B + instructions_pawn[i].to_y;
 			if (are_coords_valid(x, y) && Board[8 - y][x - 'a'] == Base + 'P')
@@ -243,31 +242,31 @@ bool is_piece_attacked(char piece, const char A, const signed char B, const char
 attacker_has_been_found:
 	store_piece.alphabetical = x;
 	store_piece.numerical = y;
-	store_piece.piece = Board[8 - y][x + 'a'];
+	store_piece.type = Board[8 - y][x - 'a'];
 	return 1;
 }
 
-// We know that king is in (A, B) and can't escape.
-bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], const char en_passant_field[])
+// We know that king is attacked in (A, B) and can't escape.
+bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], const char En_Passant_Field[])
 {
 	const char King = Board[8 - B][A - 'a'];
 	is_piece_attacked(King, A, B, Board, 1);
-	const char Piece = store_piece.piece, C = store_piece.alphabetical;
+	const char Piece = store_piece.type, C = store_piece.alphabetical;
 	const signed char D = store_piece.numerical;
 	char (*new_board)[8] = (char (*)[8])malloc(8 * 8 * sizeof(char));
 	memcpy(new_board, Board, 8 * 8 * sizeof(char));
 	for (signed char i = 1; is_piece_attacked(Piece, C, D, Board, i); ++i) {  // can we capture the attacker?
 		new_board[8 - store_piece.numerical][store_piece.alphabetical - 'a'] = ' ';
-		new_board[8 - D][C - 'a'] = store_piece.piece;
+		new_board[8 - D][C - 'a'] = store_piece.type;
 		if (is_piece_attacked(King, A, B, (const char (*)[8])new_board, 1) == 0)
 			return 0;
 		new_board[8 - D][C - 'a'] = Piece;
-		new_board[8 - store_piece.numerical][store_piece.alphabetical - 'a'] = store_piece.piece;
+		new_board[8 - store_piece.numerical][store_piece.alphabetical - 'a'] = store_piece.type;
 	}
 	switch (toupper(Piece)) {
 		case 'P':  // we'll try to capture the attacker en passant
 		{
-			if (en_passant_field[0] != C)  // we definitely can't capture the attacker en passant
+			if (En_Passant_Field[0] != C)  // we definitely can't capture the attacker en passant
 				return 1;
 			const char Defender = (islower(Piece) ? 'P' : 'p');
 			if (C != 'a' && new_board[8 - D][C - 'a' - 1] == Defender) {
@@ -297,12 +296,14 @@ bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], 
 			if (Distance > 1)
 				for (x += to_x, y += to_y; !(x == C && y == D); x += to_x, y += to_y)
 					for (signed char i = -1; is_piece_attacked(Piece, x, y, Board, i); --i) {  // can we COVER the king?
+						if (toupper(store_piece.type) == 'K')  // king can't cover himself
+							continue;
 						new_board[8 - store_piece.numerical][store_piece.alphabetical - 'a'] = ' ';
-						new_board[8 - D][C - 'a'] = store_piece.piece;
+						new_board[8 - D][C - 'a'] = store_piece.type;
 						if (is_piece_attacked(King, A, B, (const char (*)[8])new_board, 1) == 0)
 							return 0;
 						new_board[8 - D][C - 'a'] = Piece;
-						new_board[8 - store_piece.numerical][store_piece.alphabetical - 'a'] = store_piece.piece;
+						new_board[8 - store_piece.numerical][store_piece.alphabetical - 'a'] = store_piece.type;
 					}
 			break;
 		}
@@ -313,11 +314,11 @@ bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], 
 }
 
 // Determines if king cannot move.
-bool does_king_cannot_move(const struct structure_field *Field, char (*board)[8])
+bool does_king_cannot_move(const struct structure_piece *King, char (*board)[8])
 {
-	const char Base = Field->piece_after - ('K' - 'A');
-	const char A = Field->alphabetical;
-	const signed char B = Field->numerical;
+	const char Base = King->type - ('K' - 'A');
+	const char A = King->alphabetical;
+	const signed char B = King->numerical;
 	board[8 - B][A - 'a'] = ' ';  // king is temporarily removed
 	for (signed char i = 0, x, y; i < 8; ++i) {
 		x = A + instructions_king[i].to_x;
@@ -326,12 +327,12 @@ bool does_king_cannot_move(const struct structure_field *Field, char (*board)[8]
 			continue;
 		if (board[8 - y][x - 'a'] >= Base && board[8 - y][x - 'a'] <= Base + ('Z' - 'A'))  // king can't capture it's own piece
 			continue;
-		if (is_piece_attacked(Field->piece_after, x, y, (const char (*)[8])board, 1))  // this field is attacked
+		if (is_piece_attacked(King->type, x, y, (const char (*)[8])board, 1))  // this field is attacked
 			continue;
-		board[8 - B][A - 'a'] = Field->piece_after;  // king returns to it's field
+		board[8 - B][A - 'a'] = King->type;  // king returns to it's field
 		return 0;  // king can escape
 	}
-	board[8 - B][A - 'a'] = Field->piece_after;  // king returns to it's field
+	board[8 - B][A - 'a'] = King->type;  // king returns to it's field
 	return 1;  // king can't escape
 }
 
@@ -346,7 +347,7 @@ bool is_king_defended_after_move(char piece, char new_x, signed char new_y, char
 	memcpy(new_board, Board, 8 * 8 * sizeof(char));
 	new_board[8 - previous_y][previous_x - 'a'] = piece;
 	new_board[8 - new_y][new_x - 'a'] = ' ';
-	struct structure_field king_placement;
+	struct structure_piece king_placement;
 	if (find_piece(king, &king_placement, (const char (*)[8])new_board))
 		if (is_piece_attacked(king, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])new_board, 1) == 0) {
 			free(new_board);
@@ -619,7 +620,8 @@ int main(int argc, char *argv[])
 	char board_buffer_1[8][8], board_buffer_2[8][8];
 	char (*board_1)[8] = board_buffer_1, (*board_2)[8] = board_buffer_2;
 	int fen_number = 0, move_number = 1, number_of_written_moves = 0;
-	struct structure_field distinctions[4], *field, *previous_field, king_placement;
+	struct structure_field distinctions[4], *field, *previous_field;
+	struct structure_piece king_placement;
 	signed char number_of_differences;
 	char control_character, whose_move = 'w', castling_prospects[4 + 1] = "KQkq", en_passant_field[2 + 1] = "-";
 	char control_string[8 + 1], result[7 + 1];  // to store respectively "Result \"" and "1/2-1/2"
@@ -778,7 +780,7 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		if (parameters.validate == 1 && find_piece(whose_move == 'w' ? 'K' : 'k', &king_placement, (const char (*)[8])board_2))
-			if (is_piece_attacked(king_placement.piece_after, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 1)) {
+			if (is_piece_attacked(king_placement.type, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 1)) {
 				if (parameters.quiet != 1)
 					fprintf(stderr, "Skipped \"%s\" (%d%s FEN) because we're still in check.\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
 				continue;
@@ -789,14 +791,14 @@ int main(int argc, char *argv[])
 			snprintf(store_space + (first_move_number_already_written ? 1 : 0), STORE_SPACE_SIZE + 1 - (first_move_number_already_written ? 1 : 0), "%d. ", move_number);
 		fprintf(output, "%s%s", store_space, store_move);
 		if (find_piece(whose_move == 'w' ? 'k' : 'K', &king_placement, (const char (*)[8])board_2)) {
-			if (is_piece_attacked(king_placement.piece_after, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 1)) {
-				if (is_piece_attacked(king_placement.piece_after, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 2)) {  // double check
-					if (does_king_cannot_move((const struct structure_field *)&king_placement, board_2))
+			if (is_piece_attacked(king_placement.type, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 1)) {
+				if (is_piece_attacked(king_placement.type, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 2)) {  // double check
+					if (does_king_cannot_move((const struct structure_piece *)&king_placement, board_2))
 						putc('#', output);
 					else
 						fputs("++", output);
 				} else {  // single check
-					if (does_king_cannot_move((const struct structure_field *)&king_placement, board_2)
+					if (does_king_cannot_move((const struct structure_piece *)&king_placement, board_2)
 						&& is_it_checkmate(king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, (const char *)en_passant_field)
 					)
 						putc('#', output);
