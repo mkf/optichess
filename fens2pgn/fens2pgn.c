@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.4.6
+#define VERSION 0.4.7
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -157,8 +157,8 @@ bool fen2board(char *fen, char (*board)[8], bool validate)
 }
 
 /* Writes to structure of type 'structure_piece' coordinates of the first found
- * piece of type 'piece'; useful in finding kings. */
-bool find_piece(const char type_of_piece, struct structure_piece *piece, const char (*Board)[8])
+ * piece of type 'type_of_piece'; useful in finding kings. */
+bool find_piece(char type_of_piece, struct structure_piece *piece, const char (*Board)[8])
 {
 	for (signed char y = 0; y < 8; ++y)
 		for (signed char x = 0; x < 8; ++x)
