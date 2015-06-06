@@ -17,7 +17,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * date: 2015-06-04
+ * date: 2015-06-06
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
 
@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.4.4
+#define VERSION 0.4.5
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -252,9 +252,8 @@ bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], 
 {
 	const char King = Board[8 - B][A - 'a'];
 	is_piece_attacked(King, A, B, Board, 1);
-	struct structure_piece attacker = {store_piece.alphabetical, store_piece.numerical, store_piece.piece};
-	const char Piece = attacker.piece, C = attacker.alphabetical;
-	const signed char D = attacker.numerical;
+	const char Piece = store_piece.piece, C = store_piece.alphabetical;
+	const signed char D = store_piece.numerical;
 	char (*new_board)[8] = (char (*)[8])malloc(8 * 8 * sizeof(char));
 	memcpy(new_board, Board, 8 * 8 * sizeof(char));
 	for (signed char i = 1; is_piece_attacked(Piece, C, D, Board, i); ++i) {  // can we capture the attacker?
@@ -265,14 +264,11 @@ bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], 
 		new_board[8 - D][C - 'a'] = Piece;
 		new_board[8 - store_piece.numerical][store_piece.alphabetical - 'a'] = store_piece.piece;
 	}
-	if (toupper(Piece) == 'P' && en_passant_field[0] != C)  // we can't capture attacker en passant
-		return 1;
-	const signed char Distance = (abs(A - C) >= abs(B - D) ? abs(A - C) : abs(B - D));
-	char x = A, to_x = (C - A) / Distance;
-	signed char y = B, to_y = (D - B) / Distance;
 	switch (toupper(Piece)) {
-		case 'P':
+		case 'P':  // we'll try to capture the attacker en passant
 		{
+			if (en_passant_field[0] != C)  // we definitely can't capture the attacker en passant
+				return 1;
 			const char Defender = (islower(Piece) ? 'P' : 'p');
 			if (C != 'a' && new_board[8 - D][C - 'a' - 1] == Defender) {
 				new_board[8 - D][C - 'a'] = ' ';
@@ -280,7 +276,7 @@ bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], 
 				new_board[8 - (D + (islower(Piece) ? 1 : -1))][C - 'a'] = Defender;
 				if (is_piece_attacked(King, A, B, (const char (*)[8])new_board, 1) == 0)
 					return 0;
-				memcpy(new_board, Board, 8 * 8 * sizeof(char));
+				memcpy(new_board, Board, 8 * 8 * sizeof(char));  // this instruction is executed very rarely
 			}
 			if (C != 'h' && new_board[8 - D][C - 'a' + 1] == Defender) {
 				new_board[8 - D][C - 'a'] = ' ';
@@ -289,14 +285,18 @@ bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], 
 				if (is_piece_attacked(King, A, B, (const char (*)[8])new_board, 1) == 0)
 					return 0;
 			}
-		}
 			break;
+		}
 		case 'R':
 		case 'B':
-		case 'Q':
+		case 'Q':  // we'll try to cover our king
+		{
+			const signed char Distance = (abs(A - C) >= abs(B - D) ? abs(A - C) : abs(B - D));
+			char x = A, to_x = (C - A) / Distance;
+			signed char y = B, to_y = (D - B) / Distance;
 			if (Distance > 1)
-				for (x += to_x, y += to_y; x != C && y != D; x += to_x, y += to_y)
-					for (signed char i = 1; is_piece_attacked(Piece, x, y, Board, -i); ++i) {  // can we COVER the king?
+				for (x += to_x, y += to_y; !(x == C && y == D); x += to_x, y += to_y)
+					for (signed char i = -1; is_piece_attacked(Piece, x, y, Board, i); --i) {  // can we COVER the king?
 						new_board[8 - store_piece.numerical][store_piece.alphabetical - 'a'] = ' ';
 						new_board[8 - D][C - 'a'] = store_piece.piece;
 						if (is_piece_attacked(King, A, B, (const char (*)[8])new_board, 1) == 0)
@@ -305,6 +305,7 @@ bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], 
 						new_board[8 - store_piece.numerical][store_piece.alphabetical - 'a'] = store_piece.piece;
 					}
 			break;
+		}
 		default:  // enemy KNIGHT or KING (we can't cover our king)
 			return 1;
 	}
