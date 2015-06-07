@@ -17,7 +17,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  * -----------------------------------------------------------------------
  * 
- * date: 2015-06-06
+ * date: 2015-06-07
  * compiling: gcc -std=gnu11 -o fens2pgn.elf fens2pgn.c
  */
 
@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.4.7
+#define VERSION 0.4.8
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -70,17 +70,17 @@ struct structure_piece {
 } store_piece;
 
 // lists directions in which a bishop can move
-struct structure_instruction instructions_bishop[4] = {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}};
+const struct structure_instruction instructions_bishop[4] = {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}};
 // lists directions in which a king can move
-struct structure_instruction instructions_king[8] = {{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
+const struct structure_instruction instructions_king[8] = {{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
 // lists directions in which a knight can move
-struct structure_instruction instructions_knight[8] = {{2, 1}, {1, 2}, {-1, 2}, {-2, 1}, {-2, -1}, {-1, -2}, {1, -2}, {2, -1}};
+const struct structure_instruction instructions_knight[8] = {{2, 1}, {1, 2}, {-1, 2}, {-2, 1}, {-2, -1}, {-1, -2}, {1, -2}, {2, -1}};
 // lists directions in which a rook can move
-struct structure_instruction instructions_rook[4] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+const struct structure_instruction instructions_rook[4] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
 /* lists directions in which an attacking pawn can be found
  * even numbered fields {0, 2} in array stands for white pawn,
  * whereas the odd ones {1, 3} stands for black pawn */
-struct structure_instruction instructions_pawn[4] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
+const struct structure_instruction instructions_pawn[4] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
 
 struct structure_parameters {
 	bool validate;
@@ -90,7 +90,7 @@ struct structure_parameters {
 	char *write_to_file;
 };
 
-struct structure_suffixes {
+const struct structure_suffixes {
 	char st[3];
 	char nd[3];
 	char rd[3];
@@ -269,13 +269,15 @@ bool is_it_checkmate(const char A, const signed char B, const char (*Board)[8], 
 			if (En_Passant_Field[0] != C)  // we definitely can't capture the attacker en passant
 				return 1;
 			const char Defender = (islower(Piece) ? 'P' : 'p');
-			if (C != 'a' && new_board[8 - D][C - 'a' - 1] == Defender) {
+			if (C != 'a' && new_board[8 - D][C - 1 - 'a'] == Defender) {
 				new_board[8 - D][C - 'a'] = ' ';
-				new_board[8 - D][C - 'a' - 1] = ' ';
+				new_board[8 - D][C - 1 - 'a'] = ' ';
 				new_board[8 - (D + (islower(Piece) ? 1 : -1))][C - 'a'] = Defender;
 				if (is_piece_attacked(King, A, B, (const char (*)[8])new_board, 1) == 0)
 					return 0;
-				memcpy(new_board, Board, 8 * 8 * sizeof(char));  // this instruction is executed very rarely
+				new_board[8 - (D + (islower(Piece) ? 1 : -1))][C - 'a'] = ' ';
+				new_board[8 - D][C - 1 - 'a'] = Defender;
+				new_board[8 - D][C - 'a'] = Piece;
 			}
 			if (C != 'h' && new_board[8 - D][C - 'a' + 1] == Defender) {
 				new_board[8 - D][C - 'a'] = ' ';
@@ -394,7 +396,7 @@ bool is_path_straight_and_clear(char x1, signed char y1, char x2, signed char y2
 	return 1;
 }
 
-char *ordinal_number_suffix(int number)
+const char *Ordinal_Number_Suffix(int number)
 {
 	if (number % 100 >= 11 && number % 100 <= 13)
 		return suffixes.th;
@@ -684,11 +686,11 @@ int main(int argc, char *argv[])
 		number_of_differences = compare_boards((const char (*)[8])board_1, (const char (*)[8])board_2, distinctions);
 		if (number_of_differences < 2) {
 			if (parameters.verbose == 1)
-				fprintf(stderr, "Skipped \"%s\" (%d%s FEN).\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
+				fprintf(stderr, "Skipped \"%s\" (%d%s FEN).\n", fen_buffer, fen_number, Ordinal_Number_Suffix(fen_number));
 			continue;
 		}
 		if (number_of_differences > 4) {
-			fprintf(stderr, "Can't compare \"%s\" (%d%s FEN) with the previous one.\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
+			fprintf(stderr, "Can't compare \"%s\" (%d%s FEN) with the previous one.\n", fen_buffer, fen_number, Ordinal_Number_Suffix(fen_number));
 			return EILSEQ;
 		}
 		switch (number_of_differences) {
@@ -776,13 +778,13 @@ int main(int argc, char *argv[])
 		if (parameters.validate == 1 && move_is_invalid == 1) {
 			move_is_invalid = 0;
 			if (parameters.quiet != 1)
-				fprintf(stderr, "Skipped \"%s\" (%d%s FEN) because the calculated move is invalid.\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
+				fprintf(stderr, "Skipped \"%s\" (%d%s FEN) because the calculated move is invalid.\n", fen_buffer, fen_number, Ordinal_Number_Suffix(fen_number));
 			continue;
 		}
 		if (parameters.validate == 1 && find_piece(whose_move == 'w' ? 'K' : 'k', &king_placement, (const char (*)[8])board_2))
 			if (is_piece_attacked(king_placement.type, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 1)) {
 				if (parameters.quiet != 1)
-					fprintf(stderr, "Skipped \"%s\" (%d%s FEN) because we're still in check.\n", fen_buffer, fen_number, ordinal_number_suffix(fen_number));
+					fprintf(stderr, "Skipped \"%s\" (%d%s FEN) because we're still in check.\n", fen_buffer, fen_number, Ordinal_Number_Suffix(fen_number));
 				continue;
 			}
 		if (first_move_number_already_written == 1)
@@ -790,23 +792,16 @@ int main(int argc, char *argv[])
 		if (whose_move == 'w' || first_move_number_already_written == 0)
 			snprintf(store_space + (first_move_number_already_written ? 1 : 0), STORE_SPACE_SIZE + 1 - (first_move_number_already_written ? 1 : 0), "%d. ", move_number);
 		fprintf(output, "%s%s", store_space, store_move);
-		if (find_piece(whose_move == 'w' ? 'k' : 'K', &king_placement, (const char (*)[8])board_2)) {
-			if (is_piece_attacked(king_placement.type, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 1)) {
-				if (is_piece_attacked(king_placement.type, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 2)) {  // double check
-					if (does_king_cannot_move((const struct structure_piece *)&king_placement, board_2))
-						putc('#', output);
-					else
-						fputs("++", output);
-				} else {  // single check
-					if (does_king_cannot_move((const struct structure_piece *)&king_placement, board_2)
-						&& is_it_checkmate(king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, (const char *)en_passant_field)
-					)
-						putc('#', output);
-					else
-						putc('+', output);
-				}
+		if (find_piece(whose_move == 'w' ? 'k' : 'K', &king_placement, (const char (*)[8])board_2))
+			if (is_piece_attacked(king_placement.type, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 1)) {  // king is checked
+				if (does_king_cannot_move((const struct structure_piece *)&king_placement, board_2) && (
+					is_piece_attacked(king_placement.type, king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, 2)  // double check
+					|| is_it_checkmate(king_placement.alphabetical, king_placement.numerical, (const char (*)[8])board_2, (const char *)en_passant_field)
+				))
+					putc('#', output);
+				else
+					putc('+', output);
 			}
-		}
 		first_move_number_already_written = 1;
 		if (whose_move == 'b') {
 			++move_number;
