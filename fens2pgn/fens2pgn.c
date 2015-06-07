@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION 0.4.8
+#define VERSION 0.4.9
 
 /* to store the longest hypothetical piece placement field in FEN:
  * "1r1k1b1r/p1n1q1p1/1p1n1p1p/P1p1p1P1/1P1p1P1P/B1P1P1K1/1N1P1N1R/R1Q2B1b" */
@@ -95,7 +95,7 @@ const struct structure_suffixes {
 	char nd[3];
 	char rd[3];
 	char th[3];
-} suffixes = {"st", "nd", "rd", "th"};
+} Suffixes = {"st", "nd", "rd", "th"};
 
 // Determines if field (x, y) is inside chess board.
 bool are_coords_valid(char x, signed char y)
@@ -399,14 +399,14 @@ bool is_path_straight_and_clear(char x1, signed char y1, char x2, signed char y2
 const char *Ordinal_Number_Suffix(int number)
 {
 	if (number % 100 >= 11 && number % 100 <= 13)
-		return suffixes.th;
+		return Suffixes.th;
 	if (number % 10 == 1)
-		return suffixes.st;
+		return Suffixes.st;
 	if (number % 10 == 2)
-		return suffixes.nd;
+		return Suffixes.nd;
 	if (number % 10 == 3)
-		return suffixes.rd;
-	return suffixes.th;
+		return Suffixes.rd;
+	return Suffixes.th;
 }
 
 // Removes specified castling availability.
