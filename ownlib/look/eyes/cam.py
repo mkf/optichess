@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 
 class cam(eye):
-    def __init__(self,camnum,saveraw=None,savemod=None):
+    def __init__(self,camnum,saveraw=None,savemod=None,showraw=True,showmod=True):
         self.camnum=camnum;self.saveraw=saveraw;self.savemod=savemod;self.savinr=saveraw is not None ;self.savinm=savemod is not None
     def __enter__(self):
         self.cap = cv2.VideoCapture(camnum)
@@ -21,6 +21,7 @@ class cam(eye):
         ret,frame=self.cap.read()
         if not ret: raise CameraReadError(self.camnum)
         if self.savinr: self.out_r.write(frame)
+        if showraw: cv2.imshow('raw',frame)
         return frame
     def __exit__(self,err_type,err_value,err_traceback):
         pass
