@@ -1,2 +1,2 @@
-class WithZBar:
+class WithZBar(ITFDetection):
     import zbar

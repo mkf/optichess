@@ -1,0 +1,1 @@
+class DetEngine(Detection): pass

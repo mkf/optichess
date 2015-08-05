@@ -1,0 +1,1 @@
+class UseZXing(DetEngine): pass

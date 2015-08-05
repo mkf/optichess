@@ -1,2 +1,2 @@
-class WithZBar:
+class WithZBar(QRDetection):
     import zbar

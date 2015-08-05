@@ -1,1 +1,1 @@
-class WithZXing: pass
+class WithZXing(DmDetection): pass

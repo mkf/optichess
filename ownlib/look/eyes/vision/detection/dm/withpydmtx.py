@@ -1,2 +1,2 @@
-class WithPyDmtx:
+class WithPyDmtx(DMDetection):
     import pydmtx
