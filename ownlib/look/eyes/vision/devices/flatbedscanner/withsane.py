@@ -1,0 +1,1 @@
+class WithSANE: pass

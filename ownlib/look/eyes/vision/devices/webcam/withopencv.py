@@ -1,0 +1,1 @@
+class WithOpenCV: pass

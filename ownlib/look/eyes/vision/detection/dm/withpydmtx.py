@@ -1,0 +1,2 @@
+class WithPyDmtx:
+    import pydmtx

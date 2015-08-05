@@ -1,0 +1,2 @@
+class WithZBar:
+    import zbar
