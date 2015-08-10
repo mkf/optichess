@@ -1,1 +1,0 @@
-class Square(Calibration): pass
