@@ -11,6 +11,7 @@ class reality(hand):
 		self.motx = Motor(self.brick,PORT_A)
 		self.moty = Motor(self.brick,PORT_B)
 		self.motz = Motor(self.brick,PORT_C)
+                self.motw = Motor(self.brick,PORT_D)
 		return self
 	def __exit__(self, exc_type, exc_val, exc_tb): print exc_type,exc_val,exc_tb
 class realmove(move):
