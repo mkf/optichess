@@ -1,0 +1,1 @@
+class WithZXing(QRDetection): pass

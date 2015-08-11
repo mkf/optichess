@@ -1,0 +1,1 @@
+class ColorDetection(Detection): pass
