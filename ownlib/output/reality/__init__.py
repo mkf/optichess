@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 __author__ = 'ArchieT'
-from ...output import Output,OutputMove,OutputFigure,ofR,ofB,ofK,ofN,ofP,ofQ
+#from ...output import Output,OutputMove,OutputFigure,ofR,ofB,ofK,ofN,ofP,ofQ
+from ...output import *
 # For now, the only real output considered will be an NXT-based machine.
 import nxt.locator
 from nxt.motor import Motor,PORT_A,PORT_B,PORT_C,PORT_D
 class Reality(Output):
-	def __init__(self,kostkaid="00:16:53:07:F8:5B"):
+	def __init__(self,kostkaid="00:16:53:07:F8:5B",homepos=(0,0)):
 		self.kostkaid = kostkaid
+                self.HOMEpos=homepos
 	def __enter__(self):
 		self.brick = nxt.locator.find_one_brick(self.kostkaid)
 		self.motx = Motor(self.brick,PORT_A)
@@ -15,13 +17,17 @@ class Reality(Output):
                 self.motw = Motor(self.brick,PORT_D)
 		return self
 	def __exit__(self, exc_type, exc_val, exc_tb): print exc_type,exc_val,exc_tb
+        def goto(self,loc): print "goto ",loc
+        def lift(self,hchwyt,hlift): print "lifing from ",hchwyt," to ",hlift
+        def place(self,ileopuscic): print "opuszczanie o ",ileopuscic," , placing"
+        def home(self): print "----homing----" ; self.goto(self.HOMEpos)
 class RealMove(OutputMove):
-	PROPERMACHINE = reality
+	PROPERMACHINE = Reality
 	def __init__(self,maszyna,typ,skad,dokad):
 		assert isinstance(maszyna,reality),"not isinstance(maszyna,reality)"
 		move.__init__(self,maszyna,typ,skad,dokad)
 class RealFigure(OutputFigure):
-	PROPERMACHINE = reality
+	PROPERMACHINE = Reality
 	def __init__(self,maszyna,figheight,pullheight):
 		assert isinstance(maszyna,reality),"not isinstance(maszyna,reality)"
 		figure.__init__(self,maszyna,figheight,pullheight)
