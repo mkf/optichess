@@ -11,10 +11,10 @@ class Reality(Output):
                 self.HOMEpos=homepos
 	def __enter__(self):
 		self.brick = nxt.locator.find_one_brick(self.kostkaid)
-		self.motx = Motor(self.brick,PORT_A)
-		self.moty = Motor(self.brick,PORT_B)
-		self.motz = Motor(self.brick,PORT_C)
-                self.motw = Motor(self.brick,PORT_D)
+		self.motxl = Motor(self.brick,PORT_A)
+		self.motxr = Motor(self.brick,PORT_B)
+		self.motyl = Motor(self.brick,PORT_C)
+                self.motyr = Motor(self.brick,PORT_D)
 		return self
 	def __exit__(self, exc_type, exc_val, exc_tb): print exc_type,exc_val,exc_tb
         def goto(self,loc): print "goto ",loc
