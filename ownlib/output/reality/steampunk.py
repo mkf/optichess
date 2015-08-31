@@ -4,11 +4,12 @@ __author__ = "ArchieT"
 from ..reality import *
 from math import sin,cos,radians,atan2
 class Steampunk(Reality):
+    DEFHOMEFILERANKWHEELS=(0,0)
     def __init__(
             self,
             kostkaid="00:16:53:07:F8:5B",
-            homefilerankwheels=(0,0),
-            filerankwheels=homefilerankwheels,
+            homefilerankwheels=DEFHOMEFILERANKWHEELS,
+            filerankwheels=DEFHOMEFILERANKWHEELS,
             filewheelr=1,rankwheelr=1,
             filewheeleng=100,rankwheeleng=100,
             filewheelh=1,rankwheelh=1,
@@ -22,7 +23,7 @@ class Steampunk(Reality):
         self.filewheelh=filewheelh;self.rankwheelh=rankwheelh
         self.filewheelloc=filewheelloc;self.rankwheelloc=rankwheelloc
         self.filewheelarmlen=filewheelarmlen;self.rankwheelarmlen=rankwheelarmlen
-        Reality.__init__(self,kostkaid=kostkaid,homepos=homepos)
+        Reality.__init__(self,kostkaid=kostkaid,homepos=self.jpos(homefilerankwheels))
         self.filerankwheels=filerankwheels
     @staticmethod
     def dpos(armlen,whloc,whh,whr,wh):
@@ -37,8 +38,8 @@ class Steampunk(Reality):
         loc = la+ploc
         return loc
     def jpos(self,filerankwheels):
-        pfile = dpos(self.filewheelarmlen,self.filewheelloc,self.filewheelh,self.filewheelr,filerankwheels[0])
-        prank = dpos(self.rankwheelarmlen,self.rankwheelloc,self.rankwheelh,self.rankwheelr,filerankwheels[1])
+        pfile = Steampunk.dpos(self.filewheelarmlen,self.filewheelloc,self.filewheelh,self.filewheelr,filerankwheels[0])
+        prank = Steampunk.dpos(self.rankwheelarmlen,self.rankwheelloc,self.rankwheelh,self.rankwheelr,filerankwheels[1])
         return (pfile,prank)
     @staticmethod
     def dang(loc,whloc,armlen,whh,whr):
@@ -48,5 +49,5 @@ class Steampunk(Reality):
         pass
     def goto(self,loc):
         print "goto ",loc
-        fdat = dang(loc,self.filewheelloc,self.filewheelarmlen,self.filewheelh,self.filewheelr)
-        rdat = dang(loc,self.rankwheelloc,self.rankwheelarmlen,self.rankwheelh,self.rankwheelr)
+        fdat = Steampunk.dang(loc,self.filewheelloc,self.filewheelarmlen,self.filewheelh,self.filewheelr)
+        rdat = Steampunk.dang(loc,self.rankwheelloc,self.rankwheelarmlen,self.rankwheelh,self.rankwheelr)
