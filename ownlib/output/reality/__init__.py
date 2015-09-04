@@ -6,9 +6,10 @@ from .. import *
 import nxt.locator
 from nxt.motor import Motor,PORT_A,PORT_B,PORT_C
 class Reality(Output):
-	def __init__(self,kostkaid="00:16:53:07:F8:5B",homepos=(0,0)):
+	def __init__(self,kostkaid="00:16:53:07:F8:5B",homepos=(0,0),pos=(0,0)):
 		self.kostkaid = kostkaid
-                self.HOMEpos=homepos
+                self.homepos=homepos
+                self.pos=pos
 	def __enter__(self):
 		self.brick = nxt.locator.find_one_brick(self.kostkaid)
 		self.motx = Motor(self.brick,PORT_A)

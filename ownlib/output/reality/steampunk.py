@@ -23,7 +23,7 @@ class Steampunk(Reality):
         self.filewheelh=filewheelh;self.rankwheelh=rankwheelh
         self.filewheelloc=filewheelloc;self.rankwheelloc=rankwheelloc
         self.filewheelarmlen=filewheelarmlen;self.rankwheelarmlen=rankwheelarmlen
-        Reality.__init__(self,kostkaid=kostkaid,homepos=self.jpos(homefilerankwheels))
+        Reality.__init__(self,kostkaid=kostkaid,homepos=self.jpos(homefilerankwheels),pos=self.jpos(filerankwheels))
         self.filerankwheels=filerankwheels
     @staticmethod
     def dpos(armlen,whloc,whh,whr,wh):
