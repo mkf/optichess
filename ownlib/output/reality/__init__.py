@@ -12,11 +12,15 @@ class Reality(Output):
                 self.pos=pos
 	def __enter__(self):
 		self.brick = nxt.locator.find_one_brick(self.kostkaid)
-		self.motx = Motor(self.brick,PORT_A)
-		self.moty = Motor(self.brick,PORT_B)
+		self.motfile = Motor(self.brick,PORT_A)
+		self.motrank = Motor(self.brick,PORT_B)
 		self.motz = Motor(self.brick,PORT_C)
 		return self
-	def __exit__(self, exc_type, exc_val, exc_tb): print exc_type,exc_val,exc_tb
+	def __exit__(self, exc_type, exc_val, exc_tb):
+            self.motx.idle()
+            self.moty.idle()
+            self.motz.idle()
+            print exc_type,exc_val,exc_tb
         def goto(self,loc): print "goto ",loc
         def lift(self,hchwyt,hlift): print "lifing from ",hchwyt," to ",hlift
         def place(self,ileopuscic): print "opuszczanie o ",ileopuscic," , placing"
